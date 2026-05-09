@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/shindan-quest-app-6JmOq]
+    branches: [main, claude/shindan-quest-app-6JmOq, claude/accounting-exam-solver-Xb76I]
 
 permissions:
   contents: read
