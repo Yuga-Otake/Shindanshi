@@ -88,6 +88,587 @@ const FINANCE_TYPE_LABELS = {
   cashflow: 'CF計算',
 };
 
+const CASE_TYPE_LABELS = {
+  organization: '組織論', hr: '人材管理', motivation: 'モチベーション', leadership: 'リーダーシップ',
+  stp: 'STP', marketing: '4P戦略', growth: '成長戦略', crm: '顧客管理',
+  qcd: 'QCD', production: '生産方式', inventory: '在庫管理', improvement: '改善活動',
+};
+const CASE_TYPE_COLORS = {
+  organization: '#64748b', hr: '#00e5ff', motivation: '#7c3aed', leadership: '#ff6b35',
+  stp: '#00e5ff', marketing: '#ff6b35', growth: '#10b981', crm: '#7c3aed',
+  qcd: '#ff6b35', production: '#00e5ff', inventory: '#7c3aed', improvement: '#10b981',
+};
+
+const CASE_STUDY_PROBLEMS = [
+  // ===== 事例I 人事・組織 =====
+  {
+    id: 'case1_01', case: 'case1', type: 'organization',
+    title: '組織形態の種類と特徴', icon: '🏢',
+    xp: 60, partialXp: 15, difficulty: '基礎',
+    intro: 'A社は営業・製造・管理が縦割りの機能別組織。事業多角化を進める中で、各部門間の調整に時間がかかるようになった。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】機能別組織の「メリット」として正しいものを選べ',
+        choices: [
+          'A. 専門性が高まりスケールメリットを発揮しやすい',
+          'B. 事業部ごとの損益責任が明確になる',
+          'C. 複数事業の資源配分が柔軟になる',
+          'D. 製品別に顧客ニーズへ迅速に対応できる',
+        ],
+        correct: 0,
+        explanation: '機能別組織は同職能を一箇所に集中させるため専門性・効率性が高まる。一方、事業をまたいだ調整が難しくなる欠点がある。B〜Dは事業部制組織のメリット。',
+      },
+      {
+        id: 2,
+        question: '【Step2】多角化が進んだA社に適した組織形態と、その主なメリットを選べ',
+        choices: [
+          'A. 事業部制組織 — 各事業部が独立採算で意思決定が速くなる',
+          'B. マトリックス組織 — 命令系統が一本化される',
+          'C. 機能別組織のまま維持 — 多角化時に最も有効',
+          'D. 持株会社制 — 子会社が存在しない場合でも有効',
+        ],
+        correct: 0,
+        explanation: '事業部制は事業ごとに損益責任を持たせ、市場への迅速な対応が可能。多角化時の標準的な組織形態。マトリックスは命令系統が複線化するため混乱を招きやすい。',
+      },
+      {
+        id: 3,
+        question: '【Step3】事業部制組織の「デメリット」として正しいものを選べ',
+        choices: [
+          'A. 事業部間で資源の重複が生じやすく、全社最適より部分最適に陥りやすい',
+          'B. 専門人材の育成が難しくなる',
+          'C. 新製品開発のスピードが落ちる',
+          'D. 経営トップへの権限集中が強まる',
+        ],
+        correct: 0,
+        explanation: '各事業部が独立するため人材・設備の重複が生じやすく、事業部間の壁（サイロ化）が問題になる。B〜Dは機能別組織のデメリット。',
+      },
+    ],
+  },
+  {
+    id: 'case1_02', case: 'case1', type: 'hr',
+    title: '人材マネジメントの6つの切り口', icon: '👥',
+    xp: 60, partialXp: 15, difficulty: '基礎',
+    intro: '解答で「ヒト（人材）に関する施策」を述べる際は、採用・配置・育成・評価・処遇・退職の6つの切り口が基本フレームワーク。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】人材マネジメントの6つの切り口として正しい組み合わせを選べ',
+        choices: [
+          'A. 採用・配置・育成・評価・処遇・退職',
+          'B. 採用・育成・評価・報酬・解雇・昇進',
+          'C. 計画・組織・指揮・統制・調整・報告',
+          'D. 選抜・訓練・評定・昇格・異動・退職',
+        ],
+        correct: 0,
+        explanation: '正解はA。採用→配置→育成→評価→処遇→退職の流れがHRM（人的資源管理）の基本。Cはファヨールの管理過程論。',
+      },
+      {
+        id: 2,
+        question: '【Step2】「非正規従業員の正規転換を進め、長期的に技術力を蓄積する」はどの切り口か',
+        choices: [
+          'A. 処遇（雇用形態の変更）と育成（長期的技能蓄積）の両面',
+          'B. 採用（新規人材獲得）のみ',
+          'C. 評価（人事考課制度の整備）',
+          'D. 退職（雇用調整）',
+        ],
+        correct: 0,
+        explanation: '雇用形態の変更は「処遇」、長期的な技能蓄積は「育成」の切り口。解答では両面を組み合わせて記述する。',
+      },
+      {
+        id: 3,
+        question: '【Step3】OJT（職場内訓練）とOff-JT（職場外訓練）はどの切り口にあたるか',
+        choices: [
+          'A. 育成',
+          'B. 採用',
+          'C. 評価',
+          'D. 処遇',
+        ],
+        correct: 0,
+        explanation: 'OJTもOff-JTも従業員のスキルを高める「育成」の施策。採用は外部から人を獲得する、評価は業績・能力を査定する切り口。',
+      },
+    ],
+  },
+  {
+    id: 'case1_03', case: 'case1', type: 'motivation',
+    title: 'モチベーション理論（マズロー・ハーツバーグ）', icon: '🧠',
+    xp: 90, partialXp: 20, difficulty: '応用',
+    intro: 'マズローの欲求段階説とハーツバーグの二要因理論は、従業員の動機づけ施策を考える際の代表的なフレームワーク。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】マズローの欲求の5段階（低次→高次）の正しい順序を選べ',
+        choices: [
+          'A. 生理的→安全→社会的（所属）→承認→自己実現',
+          'B. 生理的→社会的→安全→承認→自己実現',
+          'C. 安全→生理的→承認→社会的→自己実現',
+          'D. 生理的→安全→承認→社会的→自己実現',
+        ],
+        correct: 0,
+        explanation: '正解はA。低次の欲求が満たされると高次の欲求が生まれる。社会的欲求（帰属感）→承認欲求（認められたい）→自己実現欲求の順が正確。',
+      },
+      {
+        id: 2,
+        question: '【Step2】ハーツバーグの「衛生要因」に該当するものを選べ',
+        choices: [
+          'A. 給与・作業条件・会社の方針（不満を防ぐが満足はもたらさない）',
+          'B. 達成感・承認・責任（満足を積極的にもたらす）',
+          'C. 自己実現・成長の機会',
+          'D. 仕事そのものの面白さ',
+        ],
+        correct: 0,
+        explanation: '衛生要因（Hygiene Factor）は不満を予防するが満足をもたらさない要因。給与・労働環境・会社の方針など。B〜Dは動機づけ要因。',
+      },
+      {
+        id: 3,
+        question: '【Step3】「動機づけ要因（モチベーター）」に該当するものを選べ',
+        choices: [
+          'A. 達成感・仕事の面白さ・責任の拡大・成長（満足を積極的に高める）',
+          'B. 給与水準・会社の安定性',
+          'C. 良好な対人関係・上司との関係',
+          'D. 作業環境・福利厚生',
+        ],
+        correct: 0,
+        explanation: '動機づけ要因は積極的な満足をもたらす要因。達成感・承認・仕事そのものへの興味・責任・成長などが該当。B〜Dは衛生要因。',
+      },
+      {
+        id: 4,
+        question: '【Step4】「従業員のモチベーション向上策」を解答に書く際の正しいアプローチを選べ',
+        choices: [
+          'A. 衛生要因で不満をなくしつつ、動機づけ要因（権限委譲・評価・やりがい）で満足を高める',
+          'B. 給与を上げれば必ずモチベーションが高まる',
+          'C. 衛生要因の充実だけで十分',
+          'D. 自己実現欲求を満たすことのみが有効',
+        ],
+        correct: 0,
+        explanation: '衛生要因だけでは不満をなくすだけ。積極的な満足を生むには動機づけ要因（仕事の裁量・評価制度・成長機会）の充実が必要。両方を組み合わせるのが正解。',
+      },
+    ],
+  },
+  {
+    id: 'case1_04', case: 'case1', type: 'leadership',
+    title: 'PM理論と権限委譲', icon: '🎯',
+    xp: 80, partialXp: 18, difficulty: '応用',
+    intro: 'リーダーシップ論のPM理論（三隅二不二）と権限委譲（エンパワーメント）は、事例Iの組織活性化問題で頻出。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】PM理論における「P機能」と「M機能」の説明として正しいものを選べ',
+        choices: [
+          'A. P＝目標達成機能（課題遂行）、M＝集団維持機能（人間関係）',
+          'B. P＝プランニング機能、M＝マネジメント機能',
+          'C. P＝評価・処遇機能、M＝モチベーション機能',
+          'D. P＝生産性向上機能、M＝マニュアル化機能',
+        ],
+        correct: 0,
+        explanation: 'PM理論はP（Performance：目標達成・課題遂行）とM（Maintenance：集団維持・人間関係）の2軸でリーダーシップタイプを分類。PM型（両方高い）が最も有効とされる。',
+      },
+      {
+        id: 2,
+        question: '【Step2】権限委譲（エンパワーメント）が有効な状況として正しいものを選べ',
+        choices: [
+          'A. 部下のスキルが高く、意思決定スピードが求められる場面',
+          'B. 業務が標準化されておらずミスが許されない新人研修時',
+          'C. 経営危機で迅速なトップ判断が必要なとき',
+          'D. 組織規模が小さく全員が同じ業務を行うとき',
+        ],
+        correct: 0,
+        explanation: '権限委譲は部下のスキルや意欲が高い場合に有効。意思決定を現場に委ねることで組織の俊敏性が高まる。B〜Dは権限集中が適する状況。',
+      },
+      {
+        id: 3,
+        question: '【Step3】「権限委譲」と「責任」の関係として正しいものを選べ',
+        choices: [
+          'A. 権限を委譲しても最終責任は委譲者（上位者）に残る',
+          'B. 権限委譲すれば責任も完全に移転する',
+          'C. 責任のみ委譲し権限は保持することが原則',
+          'D. 権限と責任の大きさは常に一致しなくてよい',
+        ],
+        correct: 0,
+        explanation: '権限は委譲できるが最終的な責任（アカウンタビリティ）は上位者に残る。Dは権限と責任が対応していないと組織機能が低下するため誤り。',
+      },
+    ],
+  },
+  // ===== 事例II マーケティング =====
+  {
+    id: 'case2_01', case: 'case2', type: 'stp',
+    title: 'STP分析のプロセス', icon: '🎯',
+    xp: 60, partialXp: 15, difficulty: '基礎',
+    intro: '新商品展開の前に市場を分析し、ターゲットを絞り込んで、自社のポジションを明確にするSTPのプロセス。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】セグメンテーションの代表的な切り口として正しいものを選べ',
+        choices: [
+          'A. デモグラフィック（年齢・性別）、サイコグラフィック（ライフスタイル）、地理的変数など',
+          'B. 4P（製品・価格・流通・促進）による分類',
+          'C. SWOT（強み・弱み・機会・脅威）による分類',
+          'D. 売上高・利益率による分類',
+        ],
+        correct: 0,
+        explanation: 'セグメンテーションは市場を同質なグループに分割する作業。切り口は地理的変数・デモグラフィック変数・サイコグラフィック変数・行動変数の4種類が代表的。',
+      },
+      {
+        id: 2,
+        question: '【Step2】ターゲティングの3つの戦略として正しいものを選べ',
+        choices: [
+          'A. 無差別・差別化・集中（ニッチ）マーケティング',
+          'B. 浸透・スキミング・競争的価格設定',
+          'C. プッシュ・プル・双方向マーケティング',
+          'D. BtoB・BtoC・CtoC',
+        ],
+        correct: 0,
+        explanation: 'ターゲティング戦略は①無差別（全市場を1つとして扱う）②差別化（複数セグメントに各々対応）③集中（特定セグメントに絞る）の3種類。中小企業は③集中が多い。',
+      },
+      {
+        id: 3,
+        question: '【Step3】「ポジショニング」で使うポジショニングマップの軸として適切なものを選べ',
+        choices: [
+          'A. 競合他社との相対的な位置を表す2軸（例：価格×品質）',
+          'B. 自社の強みと弱みを表す2軸',
+          'C. 顧客の年齢と購入頻度を表す2軸',
+          'D. 利益率と市場成長率を表す2軸（BCGマトリックスと混同しやすい）',
+        ],
+        correct: 0,
+        explanation: 'ポジショニングマップは競合との相対的な立ち位置を可視化するツール。2軸は価格×品質、機能性×デザイン性など顧客が重視する属性で設定する。',
+      },
+    ],
+  },
+  {
+    id: 'case2_02', case: 'case2', type: 'marketing',
+    title: 'マーケティングミックス（4P）', icon: '🛒',
+    xp: 60, partialXp: 15, difficulty: '基礎',
+    intro: 'マーケティングミックスの4P（Product・Price・Place・Promotion）は、ターゲット顧客へのアプローチを体系的に設計するフレームワーク。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】「Product（製品）」戦略として中小企業が差別化できる要素を選べ',
+        choices: [
+          'A. 大企業が対応できないニッチな品揃えや高品質なカスタマイズ対応',
+          'B. 大量生産によるコスト優位の確立',
+          'C. 広告費を増やして知名度を高める（Promotionの施策）',
+          'D. 価格を下げてシェアを拡大する（Priceの施策）',
+        ],
+        correct: 0,
+        explanation: '中小企業の製品差別化は、大企業が手を出しにくいニッチな専門性や個別対応（カスタマイズ）が有効。大量生産によるコスト優位は資本力の大きい大企業向け。',
+      },
+      {
+        id: 2,
+        question: '【Step2】「Place（流通・チャネル）」で直販（D2C）モデルを選ぶメリットを選べ',
+        choices: [
+          'A. 中間マージンが不要になり顧客データを直接取得できる',
+          'B. 在庫リスクが完全になくなる',
+          'C. 販売エリアが自動的に全国に広がる',
+          'D. 製品開発コストが下がる',
+        ],
+        correct: 0,
+        explanation: 'D2C（Direct to Consumer）は中間業者を省くことでマージンを削減し、顧客の購買データを直接収集できる利点がある。在庫リスクや販路拡大は別途対応が必要。',
+      },
+      {
+        id: 3,
+        question: '【Step3】SNS口コミ（バイラルマーケティング）の特徴として正しいものを選べ',
+        choices: [
+          'A. 費用対効果が高い一方、情報拡散のコントロールが難しい',
+          'B. 広告費が大きくかかるが到達率が確実',
+          'C. 既存顧客のみにリーチする',
+          'D. 効果測定が最も難しいマスメディア手法',
+        ],
+        correct: 0,
+        explanation: 'バイラルマーケティングは低コストで拡散できるが、ネガティブな口コミも拡散するリスクがある。Bはマス広告、Cはリターゲティング広告の特徴。',
+      },
+    ],
+  },
+  {
+    id: 'case2_03', case: 'case2', type: 'growth',
+    title: 'アンゾフの成長マトリックス', icon: '📈',
+    xp: 70, partialXp: 18, difficulty: '基礎',
+    intro: 'アンゾフの成長マトリックスは「既存/新規の市場」×「既存/新規の製品」の4象限で成長戦略を整理するフレームワーク（試験頻出）。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】「既存市場 × 既存製品」の戦略名と内容を選べ',
+        choices: [
+          'A. 市場浸透戦略 — 購買頻度・利用量の拡大や既存市場での新規顧客獲得',
+          'B. 市場開発戦略 — 新しい地域・顧客層への展開',
+          'C. 製品開発戦略 — 既存顧客向けに新製品を投入',
+          'D. 多角化戦略 — 新市場に新製品を投入',
+        ],
+        correct: 0,
+        explanation: '市場浸透戦略は既存の市場・製品の組み合わせ。最もリスクが低く、既存顧客の購買増・競合からのシェア奪取などが主な施策。',
+      },
+      {
+        id: 2,
+        question: '【Step2】「新市場 × 既存製品」の戦略名を選べ',
+        choices: [
+          'A. 市場開発戦略（既存製品で新たな顧客層・地域・用途を開拓）',
+          'B. 市場浸透戦略',
+          'C. 製品開発戦略',
+          'D. 多角化戦略',
+        ],
+        correct: 0,
+        explanation: '市場開発戦略は既存製品を新しい市場（地域・顧客層・用途）に展開する戦略。輸出展開や新規チャネル開拓が代表例。',
+      },
+      {
+        id: 3,
+        question: '【Step3】アンゾフの4戦略の中で最もリスクが高いものを選べ',
+        choices: [
+          'A. 多角化戦略（新市場 × 新製品 — 既存資源・経験が活かせない）',
+          'B. 市場浸透戦略（最もリスクが低い）',
+          'C. 市場開発戦略（製品は既存のため中程度のリスク）',
+          'D. 製品開発戦略（市場は既存のため中程度のリスク）',
+        ],
+        correct: 0,
+        explanation: '多角化戦略は未知の市場に未知の製品を投入するため、既存の経験・ノウハウが活かせずリスクが最も高い。市場浸透が最低リスク、その他2つは中間。',
+      },
+    ],
+  },
+  {
+    id: 'case2_04', case: 'case2', type: 'crm',
+    title: 'RFM分析と顧客生涯価値（LTV）', icon: '💎',
+    xp: 90, partialXp: 20, difficulty: '応用',
+    intro: '既存顧客のリピート促進には、RFM分析でロイヤル顧客を特定し、LTV（顧客生涯価値）を最大化する施策が有効。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】RFM分析の「R・F・M」が表す指標の正しい組み合わせを選べ',
+        choices: [
+          'A. Recency（最終購買日）、Frequency（購買頻度）、Monetary（購買金額）',
+          'B. Revenue（売上）、Frequency（頻度）、Marketing（施策数）',
+          'C. Reach（到達数）、Frequency（接触回数）、Message（メッセージ数）',
+          'D. Rate（転換率）、Funnel（漏斗段階）、Metrics（指標数）',
+        ],
+        correct: 0,
+        explanation: 'RFM分析は顧客を3軸（最終購買日・購買頻度・購買金額）で評価し、ロイヤル顧客（R高・F高・M高）を特定してCRM施策に活かす手法。',
+      },
+      {
+        id: 2,
+        question: '【Step2】RFM分析でロイヤル顧客（最優良顧客）に共通する特徴を選べ',
+        choices: [
+          'A. 最近購買し（R高）、購買頻度が高く（F高）、購買金額が大きい（M高）',
+          'B. 購買金額は大きいが購買頻度は低い（M高・F低）',
+          'C. 購買頻度が高いが購買金額は少額（F高・M低）',
+          'D. 昔は購買していたが最近は購買していない（R低）',
+        ],
+        correct: 0,
+        explanation: 'ロイヤル顧客はR（最近購買）・F（高頻度）・M（高額）がすべて高い顧客。R低は離脱リスクが高い顧客であり、再活性化施策の対象。',
+      },
+      {
+        id: 3,
+        question: '【Step3】LTV（顧客生涯価値）を高めるための施策として最も有効なものを選べ',
+        choices: [
+          'A. 顧客との関係性を深め、購買単価と購買頻度を高めながら離脱（チャーン）を防ぐ',
+          'B. 新規顧客獲得広告費を増やす（LTVより顧客獲得コストに影響）',
+          'C. 製品価格を下げて購買しやすくする（単価低下でLTV低下リスク）',
+          'D. SNSフォロワー数を増やす（直接LTVには連動しない）',
+        ],
+        correct: 0,
+        explanation: 'LTV＝購買単価×購買頻度×継続期間。離脱を防ぎ（継続期間↑）、アップセル・クロスセルで単価・頻度を高めることが直接的にLTVを向上させる。',
+      },
+      {
+        id: 4,
+        question: '【Step4】中小企業における「ニッチ戦略」と「差別化戦略」の違いとして正しいものを選べ',
+        choices: [
+          'A. ニッチは特定の小市場（隙間）に集中、差別化は幅広い市場で独自性を打ち出す',
+          'B. ニッチは価格競争で勝つ戦略、差別化はコストリーダーシップ戦略',
+          'C. ニッチは大企業向けの戦略、差別化は中小企業向けの戦略',
+          'D. 両者の違いはなく実質的に同義',
+        ],
+        correct: 0,
+        explanation: 'ポーターの競争戦略では①コストリーダーシップ②差別化③集中（ニッチ）の3類型。ニッチは特定セグメントに資源集中、差別化は広い市場で独自価値を提供する戦略。',
+      },
+    ],
+  },
+  // ===== 事例III 生産・技術 =====
+  {
+    id: 'case3_01', case: 'case3', type: 'qcd',
+    title: 'QCDの概念と改善の切り口', icon: '⚙️',
+    xp: 60, partialXp: 15, difficulty: '基礎',
+    intro: '製造業の経営課題は「QCD」（品質・コスト・納期）の3軸で整理し、施策を提案するのが事例IIIの基本的な切り口。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】QCDのうち「Q（品質）」向上のための管理手法として正しいものを選べ',
+        choices: [
+          'A. QC活動・統計的品質管理・不良品発生の原因分析（4M分析：Man・Machine・Material・Method）',
+          'B. PERT/CPM（プロジェクトのスケジュール管理）',
+          'C. ABC分析（在庫の優先度分類）',
+          'D. 損益分岐点分析（CVP分析）',
+        ],
+        correct: 0,
+        explanation: '4M分析（人・機械・材料・方法）は不良発生原因を体系的に探索するツール。統計的品質管理（SQC）とQCサークル活動も品質改善の代表的な手法。',
+      },
+      {
+        id: 2,
+        question: '【Step2】「D（納期）」短縮のための生産管理上の施策として正しいものを選べ',
+        choices: [
+          'A. ボトルネック工程の解消・小ロット化・工程間仕掛在庫の削減',
+          'B. 広告費の増大による需要喚起',
+          'C. 従業員の賃金引き上げ',
+          'D. 新製品開発の加速',
+        ],
+        correct: 0,
+        explanation: 'リードタイム（納期）を短縮するには生産の停滞箇所（ボトルネック）を解消し、工程間の仕掛品在庫を減らすことが有効。小ロット化で段取り回数が増えるが全体のリードタイムは短縮できる。',
+      },
+      {
+        id: 3,
+        question: '【Step3】事例IIIの解答で「コスト（C）削減策」として適切な切り口を選べ',
+        choices: [
+          'A. 材料費削減（歩留まり向上・購買改善）、労務費削減（生産効率向上）、経費削減（設備稼働率向上）',
+          'B. 広告宣伝費の削減のみ',
+          'C. 人員削減のみ',
+          'D. 設備投資の凍結のみ',
+        ],
+        correct: 0,
+        explanation: '製造原価は「材料費・労務費・製造経費」の3要素。それぞれの削減策（歩留まり改善・多能工化・設備稼働率向上）を組み合わせて解答するのが事例IIIのセオリー。',
+      },
+    ],
+  },
+  {
+    id: 'case3_02', case: 'case3', type: 'production',
+    title: '生産方式の種類（個別・ロット・連続）', icon: '🏭',
+    xp: 60, partialXp: 15, difficulty: '基礎',
+    intro: '生産方式は「個別生産・ロット生産・連続生産（大量生産）」の3種類が基本。受注形態や需要の特性に応じて選択する。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】「個別受注生産」の特徴として正しいものを選べ',
+        choices: [
+          'A. 顧客ごとの仕様に合わせて1品（または少数）を製造。高品質・高単価だがリードタイムが長い',
+          'B. 同一製品を大量に製造し在庫から出荷する（見込み生産）',
+          'C. 複数種類の製品をまとめてロット単位で繰り返し生産する',
+          'D. 製品が途切れなく連続して流れる工程（石油精製・化学など）',
+        ],
+        correct: 0,
+        explanation: '個別受注生産は顧客仕様ごとに生産するため高付加価値だが段取りが多く生産効率が低下しやすい。建設・造船・特注機械などが代表例。',
+      },
+      {
+        id: 2,
+        question: '【Step2】「ロット生産」が有効な状況として正しいものを選べ',
+        choices: [
+          'A. 種類が多く需要量が中程度の製品を効率よく生産したいとき',
+          'B. 需要が非常に大きく均一な製品を大量に生産するとき（連続生産が有効）',
+          'C. 顧客ごとに仕様が異なりカスタマイズが必要なとき（個別生産が有効）',
+          'D. 一度しか生産しない特注品のとき（個別生産が有効）',
+        ],
+        correct: 0,
+        explanation: 'ロット生産は同一品を一定数量まとめて生産する方式。多品種中量生産に適しており、段取り替えと生産効率のバランスを取りやすい。',
+      },
+      {
+        id: 3,
+        question: '【Step3】「見込み生産」のデメリットとして正しいものを選べ',
+        choices: [
+          'A. 需要予測が外れると不良在庫（余剰在庫）が発生し在庫コストが増大する',
+          'B. 納期が長くなりやすい（受注生産のデメリット）',
+          'C. 設備稼働率が上がりにくい（見込み生産は稼働率を高めやすい）',
+          'D. 製品の品質管理が難しくなる',
+        ],
+        correct: 0,
+        explanation: '見込み生産は需要予測に基づいて事前に在庫を持つ方式。予測精度が低いと過剰在庫（在庫コスト増大）か欠品（機会損失）のリスクがある。',
+      },
+    ],
+  },
+  {
+    id: 'case3_03', case: 'case3', type: 'inventory',
+    title: '発注方式と安全在庫', icon: '📦',
+    xp: 80, partialXp: 18, difficulty: '応用',
+    intro: '適正な在庫水準を維持するために、発注のタイミングと量を決める「定量発注方式」と「定期発注方式」の使い分けが重要。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】「定量発注方式（発注点方式）」の特徴として正しいものを選べ',
+        choices: [
+          'A. 在庫量が一定の水準（発注点）を下回ったら、毎回一定量を発注する',
+          'B. 一定の期間ごとに在庫を確認し、発注量を変動させて発注する（定期発注方式）',
+          'C. 在庫がゼロになったときのみ発注する',
+          'D. 需要予測に基づき毎週一定量を発注する',
+        ],
+        correct: 0,
+        explanation: '定量発注（発注点方式）は在庫が発注点を割り込んだら一定量（発注量）を発注する。管理が簡単で需要が安定した安価な品目に向いている。',
+      },
+      {
+        id: 2,
+        question: '【Step2】「定期発注方式」が適している商品を選べ',
+        choices: [
+          'A. 需要変動が大きく高価な商品（発注量を柔軟に調整したい場合）',
+          'B. 需要が安定していて安価な汎用品（定量発注の方が有効）',
+          'C. 廃棄リスクの低いデジタルコンテンツ',
+          'D. 一度しか使用しない消耗品',
+        ],
+        correct: 0,
+        explanation: '定期発注方式は一定期間ごとに発注量を調整するため、需要変動の大きい高価品の在庫を適正に管理しやすい。ABC分析のA品目（重要品目）に活用される。',
+      },
+      {
+        id: 3,
+        question: '【Step3】「安全在庫」を設定する主な目的を選べ',
+        choices: [
+          'A. 需要の変動や調達リードタイムの変動によるリスク（欠品）に備えるバッファ在庫',
+          'B. 製造コストを下げるための過剰生産分',
+          'C. 季節需要に備えた見込み在庫（サイクル在庫）',
+          'D. 輸送コスト削減のための大量購入在庫',
+        ],
+        correct: 0,
+        explanation: '安全在庫は需要や調達リードタイムの変動による欠品リスクをカバーするための余裕在庫。需要変動の標準偏差とサービス水準から算定する。',
+      },
+      {
+        id: 4,
+        question: '【Step4】ABC分析における「A品目」の管理方針として正しいものを選べ',
+        choices: [
+          'A. 売上・使用量への影響が大きい最重要品目。定期発注方式で厳密に管理する',
+          'B. 最も品目数が少なく単価も低いため管理コストをかけない',
+          'C. 廃棄リスクが高いためまとめて処分する',
+          'D. 発注頻度を下げて管理コストを削減する',
+        ],
+        correct: 0,
+        explanation: 'ABC分析はパレートの法則（80:20）を在庫管理に応用。A品目は全品目の20%程度だが売上・使用量の80%を占める重要品目。重点管理し定期発注で適正水準を維持する。',
+      },
+    ],
+  },
+  {
+    id: 'case3_04', case: 'case3', type: 'improvement',
+    title: '5S活動とTOC（ボトルネック管理）', icon: '🔧',
+    xp: 80, partialXp: 18, difficulty: '応用',
+    intro: '工場の生産性改善の基礎となる5S活動と、生産ラインの律速となるボトルネック管理（TOC：制約理論）。',
+    steps: [
+      {
+        id: 1,
+        question: '【Step1】5Sの5要素として正しいものを選べ',
+        choices: [
+          'A. 整理・整頓・清掃・清潔・躾（しつけ）',
+          'B. 計画・実施・確認・改善・標準化（PDCAサイクルと混同しやすい）',
+          'C. 品質・コスト・納期・安全・意欲（QCDと混同しやすい）',
+          'D. 整理・整頓・清掃・安全・省エネ',
+        ],
+        correct: 0,
+        explanation: '5Sは「整理（不要物を取り除く）・整頓（使いやすく配置）・清掃（きれいにする）・清潔（清掃状態を維持）・躾（ルールを守る習慣化）」。製造現場の基礎的な改善活動。',
+      },
+      {
+        id: 2,
+        question: '【Step2】TOC（制約理論）でいう「ボトルネック」の定義として正しいものを選べ',
+        choices: [
+          'A. 生産ライン全体の最大スループットを制約している、処理能力が最も低い工程',
+          'B. 最もコストが高い工程',
+          'C. 最も作業者が多い工程',
+          'D. 品質不良が最も多く発生する工程',
+        ],
+        correct: 0,
+        explanation: 'ボトルネック（制約工程）は水の流れを制約する瓶の首に例えられ、生産能力が最も低く全体のスループット（産出量）を決定する工程。ここを改善しないと全体の生産性は上がらない。',
+      },
+      {
+        id: 3,
+        question: '【Step3】ボトルネック工程の改善策として最も効果的なものを選べ',
+        choices: [
+          'A. ボトルネック工程の能力を向上させる（残業・設備増強・段取り短縮）か、非ボトルネック工程の速度をボトルネックに合わせる',
+          'B. ボトルネック以外の全工程の速度を上げる（ボトルネックは変わらず意味がない）',
+          'C. 製品ラインナップを絞り込む（根本的な解決にならない）',
+          'D. ボトルネック工程の作業者を他工程に異動させる（能力がさらに低下する）',
+        ],
+        correct: 0,
+        explanation: 'TOCのステップは①ボトルネックを識別→②ボトルネックを徹底活用（フル稼働）→③非ボトルネックをボトルネックに従属→④ボトルネックを強化→⑤改善を繰り返す。',
+      },
+    ],
+  },
+];
+
 const FINANCE_PROBLEMS = [
   // ===== CVP分析 =====
   {
@@ -872,6 +1453,7 @@ const DEFAULT_DATA = {
   weekStart: '',
   notes: [],
   financeProgress: {},
+  caseProgress: {},
   procedureCase:    null,
   procedureChecked: [],
 };
@@ -1811,8 +2393,9 @@ function HistoryTab({ data }) {
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
   const [view, setView]                   = useState('list');
+  const [selectedCase, setSelectedCase]   = useState('case4');
   const [filterType, setFilterType]           = useState('all');
   const [filterDifficulty, setFilterDifficulty] = useState('all');
   const [activeProblem, setActiveProblem] = useState(null);
@@ -1848,7 +2431,11 @@ function FinanceTab({ data, onFinanceComplete }) {
     if (currentStep + 1 >= activeProblem.steps.length) {
       setStepResults(newResults);
       setSolverDone(true);
-      onFinanceComplete(activeProblem.id, newResults.filter(Boolean).length, activeProblem.steps.length);
+      if (activeProblem.case && activeProblem.case !== 'case4') {
+        onCaseStudyComplete(activeProblem.id, newResults.filter(Boolean).length, activeProblem.steps.length);
+      } else {
+        onFinanceComplete(activeProblem.id, newResults.filter(Boolean).length, activeProblem.steps.length);
+      }
     } else {
       setStepResults(newResults);
       setCurrentStep(s => s + 1);
@@ -1857,8 +2444,9 @@ function FinanceTab({ data, onFinanceComplete }) {
     }
   }
 
-  function getProblemProgress(problemId) {
-    return data.financeProgress?.[problemId] || { attempts: 0, bestCorrect: 0, completed: false };
+  function getProblemProgress(problemId, isCaseStudy) {
+    const store = isCaseStudy ? data.caseProgress : data.financeProgress;
+    return store?.[problemId] || { attempts: 0, bestCorrect: 0, completed: false };
   }
 
   const filterTypes = [
@@ -1868,10 +2456,24 @@ function FinanceTab({ data, onFinanceComplete }) {
     { id: 'ratio', label: '財務比率' },
     { id: 'cashflow', label: 'CF計算' },
   ];
-  const filtered = FINANCE_PROBLEMS.filter(p => {
-    const typeOk = filterType === 'all' || p.type === filterType;
+  const caseSelectors = [
+    { id: 'case1', label: '事例I', sub: '人事・組織' },
+    { id: 'case2', label: '事例II', sub: 'マーケ' },
+    { id: 'case3', label: '事例III', sub: '生産' },
+    { id: 'case4', label: '事例IV', sub: '財務' },
+  ];
+  const caseTitles = {
+    case1: '事例I 人事・組織', case2: '事例II マーケティング',
+    case3: '事例III 生産・技術', case4: '事例IV 財務計算',
+  };
+  const isCaseStudy = selectedCase !== 'case4';
+  const sourceProblems = isCaseStudy
+    ? CASE_STUDY_PROBLEMS.filter(p => p.case === selectedCase)
+    : FINANCE_PROBLEMS;
+  const filtered = sourceProblems.filter(p => {
+    if (!isCaseStudy && filterType !== 'all' && p.type !== filterType) return false;
     const diffOk = filterDifficulty === 'all' || (p.difficulty || '基礎') === filterDifficulty;
-    return typeOk && diffOk;
+    return diffOk;
   });
 
   // ---- List view ----
@@ -1879,11 +2481,29 @@ function FinanceTab({ data, onFinanceComplete }) {
     return (
       <div style={{ padding: '16px 16px 80px' }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>
-          事例IV 財務計算
+          {caseTitles[selectedCase]}
         </div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>ステップ別選択問題</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>ステップ別選択問題</div>
 
-        {/* Type filter */}
+        {/* Case selector */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          {caseSelectors.map(cs => (
+            <button
+              key={cs.id}
+              onClick={() => { setSelectedCase(cs.id); setFilterType('all'); setFilterDifficulty('all'); }}
+              style={{
+                padding: '6px 12px', borderRadius: 20, border: 'none',
+                background: selectedCase === cs.id ? C.purple : C.card,
+                color: selectedCase === cs.id ? '#fff' : C.muted,
+                fontWeight: selectedCase === cs.id ? 700 : 400,
+                cursor: 'pointer', fontSize: 12,
+              }}
+            >{cs.label} <span style={{ fontSize: 10, opacity: 0.75 }}>{cs.sub}</span></button>
+          ))}
+        </div>
+
+        {/* Type filter (case4 only) */}
+        {!isCaseStudy && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
           {filterTypes.map(ft => (
             <button
@@ -1899,6 +2519,7 @@ function FinanceTab({ data, onFinanceComplete }) {
             >{ft.label}</button>
           ))}
         </div>
+        )}
 
         {/* Difficulty filter */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
@@ -1924,8 +2545,9 @@ function FinanceTab({ data, onFinanceComplete }) {
         {/* Problem cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(p => {
-            const prog = getProblemProgress(p.id);
-            const typeColor = FINANCE_TYPE_COLORS[p.type] || C.muted;
+            const prog = getProblemProgress(p.id, isCaseStudy);
+            const typeColor = (isCaseStudy ? CASE_TYPE_COLORS : FINANCE_TYPE_COLORS)[p.type] || C.muted;
+            const typeLabel = (isCaseStudy ? CASE_TYPE_LABELS : FINANCE_TYPE_LABELS)[p.type];
             return (
               <div
                 key={p.id}
@@ -1943,7 +2565,7 @@ function FinanceTab({ data, onFinanceComplete }) {
                     <span style={{
                       fontSize: 10, fontWeight: 700, color: typeColor,
                       background: typeColor + '22', borderRadius: 4, padding: '2px 6px',
-                    }}>{FINANCE_TYPE_LABELS[p.type]}</span>
+                    }}>{typeLabel}</span>
                     {p.difficulty === '応用' && (
                       <span style={{
                         fontSize: 10, fontWeight: 700, color: C.gold,
@@ -2156,7 +2778,7 @@ function BottomNav({ active, onChange, remainingCount }) {
     { id: 'procedure',  label: '手順',     icon: '📋' },
     { id: 'reflection', label: '振り返り', icon: '📝' },
     { id: 'history',    label: '履歴',     icon: '📜' },
-    { id: 'finance',    label: '財務',     icon: '💰' },
+    { id: 'finance',    label: '演習',     icon: '📚' },
   ];
 
   return (
@@ -2326,6 +2948,42 @@ export default function App() {
     }
   }
 
+  function handleCaseStudyComplete(problemId, correctCount, totalCount) {
+    const problem = CASE_STUDY_PROBLEMS.find(p => p.id === problemId);
+    const prev = data.caseProgress?.[problemId] || { attempts: 0, bestCorrect: 0, completed: false };
+    const newBest = Math.max(prev.bestCorrect, correctCount);
+    const nowCompleted = newBest === totalCount;
+    const alreadyCompleted = prev.completed;
+
+    let d = {
+      ...data,
+      caseProgress: {
+        ...data.caseProgress,
+        [problemId]: { attempts: prev.attempts + 1, bestCorrect: newBest, completed: nowCompleted },
+      },
+    };
+
+    let xpAwarded = 0;
+    if (nowCompleted && !alreadyCompleted) {
+      xpAwarded = problem.xp;
+    } else if (!alreadyCompleted && correctCount > 0) {
+      xpAwarded = correctCount * problem.partialXp;
+    }
+
+    if (xpAwarded > 0) {
+      const hi = buildHistoryItem(problem.icon, `${problem.title} クリア`, xpAwarded);
+      d = applyXpGain(d, xpAwarded, hi);
+      commit(d);
+      setReward({
+        icon: problem.icon, title: problem.title, xp: xpAwarded,
+        message: nowCompleted ? '全問正解！' : `${correctCount}/${totalCount} 正解`,
+      });
+      setParticles(xpAwarded);
+    } else {
+      commit(d);
+    }
+  }
+
   function handleSaveNote(note, deleteId) {
     let notes = [...(data.notes || [])];
     if (deleteId) {
@@ -2377,7 +3035,7 @@ export default function App() {
         <HistoryTab data={data} />
       )}
       {tab === 'finance' && (
-        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} />
+        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} onCaseStudyComplete={handleCaseStudyComplete} />
       )}
 
       <BottomNav active={tab} onChange={setTab} remainingCount={remainingQuests} />
