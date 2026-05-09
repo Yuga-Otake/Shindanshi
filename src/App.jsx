@@ -1725,17 +1725,15 @@ function FinanceTab({ data, onFinanceComplete }) {
         }} />
       </div>
 
-      {/* Problem intro (step 0 only) */}
-      {currentStep === 0 && (
-        <div style={{
-          background: C.purple + '11', border: `1px solid ${C.purple}33`,
-          borderRadius: 12, padding: 14, marginBottom: 16,
-          fontSize: 13, color: C.text, lineHeight: 1.7,
-        }}>
-          <div style={{ fontSize: 11, color: C.purple, fontWeight: 700, marginBottom: 6 }}>問題文</div>
-          {activeProblem?.intro}
-        </div>
-      )}
+      {/* Problem intro */}
+      <div style={{
+        background: C.purple + '11', border: `1px solid ${C.purple}33`,
+        borderRadius: 12, padding: 14, marginBottom: 16,
+        fontSize: 13, color: C.text, lineHeight: 1.7,
+      }}>
+        <div style={{ fontSize: 11, color: C.purple, fontWeight: 700, marginBottom: 6 }}>問題文</div>
+        {activeProblem?.intro}
+      </div>
 
       {/* Step question */}
       <div style={{
