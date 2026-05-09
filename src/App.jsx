@@ -7,45 +7,45 @@ import React, { useState, useEffect, useRef } from 'react';
 const STORAGE_KEY = 'shindan_quest_v4';
 
 const LEVELS = [
-  { lv: 1, name: '見習い診断士', xp: 0 },
-  { lv: 2, name: '一次突破者', xp: 100 },
-  { lv: 3, name: '事例読者', xp: 250 },
-  { lv: 4, name: '与件マスター', xp: 500 },
-  { lv: 5, name: '骨子職人', xp: 900 },
+  { lv: 1, name: '見習い診断士',     xp: 0    },
+  { lv: 2, name: '一次突破者',       xp: 100  },
+  { lv: 3, name: '事例読者',         xp: 250  },
+  { lv: 4, name: '与件マスター',     xp: 500  },
+  { lv: 5, name: '骨子職人',         xp: 900  },
   { lv: 6, name: '模範解答ハンター', xp: 1500 },
-  { lv: 7, name: '2次試験合格者', xp: 2500 },
+  { lv: 7, name: '2次試験合格者',    xp: 2500 },
 ];
 
 const QUESTS = [
-  { id: 'jikenread',   name: '与件文リーディング',      xp: 30, minutes: 5,  icon: '📖' },
-  { id: 'keyword',     name: 'キーワード抽出',          xp: 40, minutes: 7,  icon: '🔑' },
-  { id: 'skeleton',    name: '解答骨子づくり',          xp: 50, minutes: 8,  icon: '🦴' },
-  { id: 'modelread',   name: '模範解答を読む',          xp: 35, minutes: 5,  icon: '📚' },
-  { id: 'framework',   name: 'フレームワーク確認',       xp: 25, minutes: 3,  icon: '🗂️' },
-  { id: 'reflect',     name: '昨日の振り返り',          xp: 20, minutes: 3,  icon: '🔄' },
-  { id: 'aasvideo',    name: 'AAS動画を見る',           xp: 45, minutes: 20, icon: '🎬' },
-  { id: 'jireifolder', name: 'GoodNotesを整理する',    xp: 15, minutes: 2,  icon: '📁' },
-  { id: 'jikosaten',   name: '自己採点・比較',          xp: 40, minutes: 10, icon: '✏️' },
-  { id: 'financecalc', name: '財務計算の練習',          xp: 45, minutes: 10, icon: '💰' },
-  { id: 'goodjob',     name: '今日の自分を褒める',       xp: 10, minutes: 1,  icon: '⭐' },
+  { id: 'jikenread',   name: '与件文リーディング',    xp: 30, minutes: 5,  icon: '📖' },
+  { id: 'keyword',     name: 'キーワード抽出',        xp: 40, minutes: 7,  icon: '🔑' },
+  { id: 'skeleton',    name: '解答骨子づくり',        xp: 50, minutes: 8,  icon: '🦴' },
+  { id: 'modelread',   name: '模範解答を読む',        xp: 35, minutes: 5,  icon: '📚' },
+  { id: 'framework',   name: 'フレームワーク確認',    xp: 25, minutes: 3,  icon: '🗂️' },
+  { id: 'reflect',     name: '昨日の振り返り',        xp: 20, minutes: 3,  icon: '🔄' },
+  { id: 'aasvideo',    name: 'AAS動画を見る',         xp: 45, minutes: 20, icon: '🎬' },
+  { id: 'jireifolder', name: 'GoodNotesを整理する',  xp: 15, minutes: 2,  icon: '📁' },
+  { id: 'jikosaten',   name: '自己採点・比較',        xp: 40, minutes: 10, icon: '✏️' },
+  { id: 'financecalc', name: '財務計算の練習',        xp: 45, minutes: 10, icon: '💰' },
+  { id: 'goodjob',     name: '今日の自分を褒める',    xp: 10, minutes: 1,  icon: '⭐' },
 ];
 
 const PHASE_COLORS = {
-  '準備':   '#64748b',
-  '読む':   '#00e5ff',
-  '考える': '#7c3aed',
-  '書く':   '#ff6b35',
-  '見直す': '#ffd700',
-  '振り返る': '#10b981',
+  '準備':    '#64748b',
+  '読む':    '#00e5ff',
+  '考える':  '#7c3aed',
+  '書く':    '#ff6b35',
+  '見直す':  '#ffd700',
+  '振り返る':'#10b981',
 };
 
 const STEPS = [
-  { id: 1, phase: '準備',   title: 'GoodNotesを開く',   minutes: 2,  hint: '前回セットしておいた事例をそのまま開く' },
-  { id: 2, phase: '読む',   title: '設問を読む',         minutes: 8,  hint: '設問にキーワードをマーキングしておく' },
-  { id: 3, phase: '読む',   title: '与件文を読む',       minutes: 15, hint: '青=強み、赤=弱み、緑=機会、黄=脅威で色分け' },
-  { id: 4, phase: '考える', title: '骨子を作る',         minutes: 10, hint: 'メモ書きでいい。文章を書こうとしない' },
-  { id: 5, phase: '書く',   title: '解答を書く',         minutes: 35, hint: '骨子通りに書くことを優先' },
-  { id: 6, phase: '見直す', title: '見直し・誤字確認',   minutes: 5,  hint: '設問文と解答の1行目だけ確認' },
+  { id: 1, phase: '準備',    title: 'GoodNotesを開く',    minutes: 2,  hint: '前回セットしておいた事例をそのまま開く' },
+  { id: 2, phase: '読む',    title: '設問を読む',          minutes: 8,  hint: '設問にキーワードをマーキングしておく' },
+  { id: 3, phase: '読む',    title: '与件文を読む',        minutes: 15, hint: '青=強み、赤=弱み、緑=機会、黄=脅威で色分け' },
+  { id: 4, phase: '考える',  title: '骨子を作る',          minutes: 10, hint: 'メモ書きでいい。文章を書こうとしない' },
+  { id: 5, phase: '書く',    title: '解答を書く',          minutes: 35, hint: '骨子通りに書くことを優先' },
+  { id: 6, phase: '見直す',  title: '見直し・誤字確認',    minutes: 5,  hint: '設問文と解答の1行目だけ確認' },
   { id: 7, phase: '振り返る', title: '自己採点・振り返り', minutes: 10, hint: 'この振り返りを振り返りタブに入力する' },
 ];
 
@@ -57,31 +57,35 @@ const CASES = [
 ];
 
 const C = {
-  bg:        '#0a0e1a',
-  card:      '#111827',
-  accent:    '#00e5ff',
-  purple:    '#7c3aed',
-  orange:    '#ff6b35',
-  gold:      '#ffd700',
-  text:      '#e2e8f0',
-  muted:     '#64748b',
-  green:     '#10b981',
-  red:       '#ef4444',
-  border:    '#1f2937',
+  bg:     '#0a0e1a',
+  card:   '#111827',
+  accent: '#00e5ff',
+  purple: '#7c3aed',
+  orange: '#ff6b35',
+  gold:   '#ffd700',
+  text:   '#e2e8f0',
+  muted:  '#64748b',
+  green:  '#10b981',
+  red:    '#ef4444',
+  border: '#1f2937',
 };
 
 // ============================================================
 // Utilities
 // ============================================================
 
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateStr(new Date());
 }
 
 function getWeekStart() {
   const d = new Date();
   d.setDate(d.getDate() - d.getDay());
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 function getDayIndex() {
@@ -111,6 +115,13 @@ function formatTimer(seconds) {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+function formatStudyTime(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  if (h > 0) return `${h}時間${m}分`;
+  return `${m}分`;
+}
+
 function formatDateTime() {
   const d = new Date();
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -127,9 +138,13 @@ const DEFAULT_DATA = {
   lastDate: null,
   completedToday: [],
   history: [],
-  weeklyData: [0, 0, 0, 0, 0, 0, 0],
+  weeklyData:      [0, 0, 0, 0, 0, 0, 0],
+  weeklyXpData:    [0, 0, 0, 0, 0, 0, 0],
+  weeklyXpHistory: [],
   weekStart: '',
   notes: [],
+  procedureCase:    null,
+  procedureChecked: [],
 };
 
 function loadData() {
@@ -146,24 +161,75 @@ function saveData(data) {
 }
 
 function applyDateReset(d) {
-  const today = todayStr();
+  const today     = todayStr();
   const weekStart = getWeekStart();
   let u = { ...d };
 
   if (u.lastDate !== today) {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yStr = yesterday.toISOString().slice(0, 10);
-    u.streak = u.lastDate === yStr ? (u.streak || 0) + 1 : 0;
+    u.streak = u.lastDate === localDateStr(yesterday) ? (u.streak || 0) + 1 : 0;
     u.completedToday = [];
   }
 
   if (u.weekStart !== weekStart) {
-    u.weeklyData = [0, 0, 0, 0, 0, 0, 0];
-    u.weekStart = weekStart;
+    const currentWeekXp = (u.weeklyXpData || []).reduce((a, b) => a + b, 0);
+    if (currentWeekXp > 0) {
+      const wh = [...(u.weeklyXpHistory || []), currentWeekXp];
+      u.weeklyXpHistory = wh.slice(-8);
+    }
+    u.weeklyData   = [0, 0, 0, 0, 0, 0, 0];
+    u.weeklyXpData = [0, 0, 0, 0, 0, 0, 0];
+    u.weekStart    = weekStart;
   }
 
   return u;
+}
+
+// ============================================================
+// LevelUpModal
+// ============================================================
+
+function LevelUpModal({ level, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 3000,
+      }}
+    >
+      <div style={{
+        background: 'linear-gradient(135deg, #1a0d2e, #0d1a2e)',
+        border: `2px solid ${C.gold}`,
+        borderRadius: 24, padding: '48px 40px',
+        textAlign: 'center',
+        boxShadow: `0 0 80px ${C.gold}55`,
+        animation: 'lvlUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+      }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>⭐</div>
+        <div style={{ fontSize: 13, color: C.muted, letterSpacing: 3, marginBottom: 8 }}>
+          LEVEL UP!
+        </div>
+        <div style={{ fontSize: 52, fontWeight: 700, color: C.gold, lineHeight: 1 }}>
+          Lv.{level.lv}
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: C.accent, marginTop: 12, marginBottom: 24 }}>
+          {level.name}
+        </div>
+        <div style={{ fontSize: 12, color: C.muted }}>タップで閉じる</div>
+      </div>
+      <style>{`
+        @keyframes lvlUp { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
+      `}</style>
+    </div>
+  );
 }
 
 // ============================================================
@@ -171,20 +237,43 @@ function applyDateReset(d) {
 // ============================================================
 
 function TimerModal({ item, onClose, onComplete }) {
-  const [seconds, setSeconds] = useState(0);
-  const [running, setRunning] = useState(false);
-  const ref = useRef(null);
+  const [seconds,   setSeconds]   = useState(0);
+  const [running,   setRunning]   = useState(false);
+  const [countdown, setCountdown] = useState(false);
+  const [flash,     setFlash]     = useState(false);
+  const prevSecondsRef = useRef(-1);
+  const intervalRef    = useRef(null);
   const target = item.minutes * 60;
-  const over = seconds > target;
+  const over   = seconds > target;
 
   useEffect(() => {
     if (running) {
-      ref.current = setInterval(() => setSeconds(s => s + 1), 1000);
+      intervalRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
     } else {
-      clearInterval(ref.current);
+      clearInterval(intervalRef.current);
     }
-    return () => clearInterval(ref.current);
+    return () => clearInterval(intervalRef.current);
   }, [running]);
+
+  // Flash + vibrate when target is first reached
+  useEffect(() => {
+    if (seconds === target && prevSecondsRef.current === target - 1) {
+      setFlash(true);
+      navigator.vibrate?.([100, 50, 100]);
+      const t = setTimeout(() => setFlash(false), 1000);
+      prevSecondsRef.current = seconds;
+      return () => clearTimeout(t);
+    }
+    prevSecondsRef.current = seconds;
+  }, [seconds, target]);
+
+  const display = countdown ? Math.max(target - seconds, 0) : seconds;
+
+  function handleComplete() {
+    clearInterval(intervalRef.current);
+    navigator.vibrate?.([80, 40, 80]);
+    onComplete(seconds);
+  }
 
   return (
     <div style={{
@@ -196,49 +285,79 @@ function TimerModal({ item, onClose, onComplete }) {
         width: 320, textAlign: 'center', border: `1px solid ${C.border}`,
         boxShadow: `0 0 40px ${C.accent}22`,
       }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 4 }}>
           {item.title || item.name}
         </div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>
-          目安: {item.minutes}分
-        </div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>目安: {item.minutes}分</div>
+
+        <button
+          onClick={() => setCountdown(c => !c)}
+          style={{
+            background: 'none', border: `1px solid ${C.muted}44`,
+            borderRadius: 6, padding: '3px 12px', color: C.muted,
+            cursor: 'pointer', fontSize: 11, marginBottom: 20,
+          }}
+        >
+          {countdown ? '⏳ カウントダウン' : '⏱ カウントアップ'}
+        </button>
+
         <div style={{
           fontSize: 60, fontWeight: 700, fontFamily: 'monospace',
-          color: over ? C.orange : C.accent, marginBottom: 8,
-          letterSpacing: 2,
+          color: over ? C.orange : flash ? C.gold : C.accent,
+          marginBottom: 8, letterSpacing: 2,
+          transition: 'color 0.2s',
+          animation: flash ? 'timerFlash 0.4s ease alternate 2' : 'none',
         }}>
-          {formatTimer(seconds)}
+          {formatTimer(display)}
         </div>
-        {over && (
-          <div style={{ fontSize: 12, color: C.orange, marginBottom: 4 }}>
-            ⚠ 目安時間を超えました
-          </div>
+
+        {seconds === target && !over && (
+          <div style={{ fontSize: 12, color: C.gold, marginBottom: 4 }}>✨ 目安時間に達しました！</div>
         )}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 28 }}>
-          <button onClick={() => setRunning(r => !r)} style={{
-            padding: '10px 18px', borderRadius: 10, border: 'none',
-            background: running ? C.muted + '55' : C.accent,
-            color: running ? C.text : '#000',
-            fontWeight: 700, cursor: 'pointer', fontSize: 14,
-          }}>
+        {over && (
+          <div style={{ fontSize: 12, color: C.orange, marginBottom: 4 }}>⚠ 目安時間を超えました</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+          <button
+            onClick={() => setRunning(r => !r)}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: running ? C.muted + '55' : C.accent,
+              color: running ? C.text : '#000',
+              fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}
+          >
             {running ? '停止' : '開始'}
           </button>
-          <button onClick={onComplete} style={{
-            padding: '10px 18px', borderRadius: 10, border: 'none',
-            background: C.green, color: '#fff',
-            fontWeight: 700, cursor: 'pointer', fontSize: 14,
-          }}>
+          <button
+            onClick={handleComplete}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: C.green, color: '#fff',
+              fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}
+          >
             完了
           </button>
-          <button onClick={onClose} style={{
-            padding: '10px 18px', borderRadius: 10, border: 'none',
-            background: '#1f2937', color: C.muted,
-            fontWeight: 700, cursor: 'pointer', fontSize: 14,
-          }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: '#1f2937', color: C.muted,
+              fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}
+          >
             閉じる
           </button>
         </div>
       </div>
+      <style>{`
+        @keyframes timerFlash {
+          from { opacity: 1; transform: scale(1.06); }
+          to   { opacity: 0.5; transform: scale(0.96); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -293,10 +412,8 @@ function XPParticles({ xp, onDone }) {
       {[...Array(6)].map((_, i) => (
         <div key={i} style={{
           position: 'absolute',
-          color: C.gold,
-          fontWeight: 700, fontSize: 13,
-          left: `${(i - 3) * 28}px`,
-          top: 0,
+          color: C.gold, fontWeight: 700, fontSize: 13,
+          left: `${(i - 3) * 28}px`, top: 0,
           opacity: 0,
           animation: `floatUp${i % 3} 1.4s ease-out forwards`,
           animationDelay: `${i * 60}ms`,
@@ -320,7 +437,7 @@ function XPParticles({ xp, onDone }) {
 
 function WeeklyChart({ weeklyData, todayIndex }) {
   const days = ['日', '月', '火', '水', '木', '金', '土'];
-  const max = Math.max(...weeklyData, 1);
+  const max  = Math.max(...weeklyData, 1);
 
   return (
     <div style={{ background: C.card, borderRadius: 12, padding: 16, marginBottom: 16 }}>
@@ -357,12 +474,12 @@ function WeeklyChart({ weeklyData, todayIndex }) {
 function QuestTab({ data, onCompleteQuest, onNavigate }) {
   const [timerItem, setTimerItem] = useState(null);
 
-  const level = getLevel(data.xp);
-  const nextLevel = getNextLevel(data.xp);
-  const progress = getXpProgress(data.xp);
+  const level      = getLevel(data.xp);
+  const nextLevel  = getNextLevel(data.xp);
+  const progress   = getXpProgress(data.xp);
   const todayIndex = getDayIndex();
-  const todayDone = data.completedToday.length;
-  const thisWeek = data.weeklyData.reduce((a, b) => a + b, 0);
+  const todayDone  = data.completedToday.length;
+  const thisWeek   = data.weeklyData.reduce((a, b) => a + b, 0);
 
   return (
     <div style={{ padding: '16px 16px 80px' }}>
@@ -413,9 +530,9 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
         {[
-          { label: '今日完了', value: todayDone,      color: C.accent  },
-          { label: '累計',    value: data.totalTasks, color: C.purple  },
-          { label: '今週',    value: thisWeek,        color: C.gold    },
+          { label: '今日完了', value: todayDone,       color: C.accent },
+          { label: '累計',    value: data.totalTasks,  color: C.purple },
+          { label: '今週',    value: thisWeek,         color: C.gold   },
         ].map(s => (
           <div key={s.label} style={{
             background: C.card, borderRadius: 12, padding: '12px 8px', textAlign: 'center',
@@ -492,7 +609,7 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
         <TimerModal
           item={timerItem}
           onClose={() => setTimerItem(null)}
-          onComplete={() => { onCompleteQuest(timerItem); setTimerItem(null); }}
+          onComplete={(elapsed) => { onCompleteQuest(timerItem, elapsed); setTimerItem(null); }}
         />
       )}
     </div>
@@ -503,23 +620,31 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
 // ProcedureTab
 // ============================================================
 
-function ProcedureTab({ onCompleteCase, onNavigate }) {
-  const [selectedCase, setSelectedCase] = useState(null);
-  const [checkedSteps, setCheckedSteps] = useState([]);
+function ProcedureTab({ data, onCompleteCase, onNavigate, onUpdateProcedure }) {
   const [timerItem, setTimerItem] = useState(null);
 
-  const allDone = checkedSteps.length === STEPS.length;
+  const selectedCase = data.procedureCase || null;
+  const checkedSteps = data.procedureChecked || [];
+  const allDone      = checkedSteps.length === STEPS.length;
+
+  function setSelectedCase(c) {
+    onUpdateProcedure({ procedureCase: c, procedureChecked: [] });
+  }
+
+  function goBack() {
+    onUpdateProcedure({ procedureCase: null, procedureChecked: [] });
+  }
 
   function toggleStep(id) {
-    setCheckedSteps(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+    const next = checkedSteps.includes(id)
+      ? checkedSteps.filter(x => x !== id)
+      : [...checkedSteps, id];
+    onUpdateProcedure({ procedureChecked: next });
   }
 
   function handleComplete() {
     onCompleteCase(selectedCase);
-    setSelectedCase(null);
-    setCheckedSteps([]);
+    onUpdateProcedure({ procedureCase: null, procedureChecked: [] });
     onNavigate('reflection');
   }
 
@@ -557,7 +682,7 @@ function ProcedureTab({ onCompleteCase, onNavigate }) {
       {/* Back header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <button
-          onClick={() => { setSelectedCase(null); setCheckedSteps([]); }}
+          onClick={goBack}
           style={{ background: 'none', border: 'none', color: C.accent, cursor: 'pointer', fontSize: 22, padding: 0 }}
         >
           ←
@@ -580,7 +705,7 @@ function ProcedureTab({ onCompleteCase, onNavigate }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {STEPS.map(step => {
           const done = checkedSteps.includes(step.id);
-          const pc = PHASE_COLORS[step.phase] || C.muted;
+          const pc   = PHASE_COLORS[step.phase] || C.muted;
           return (
             <div key={step.id} style={{
               background: done ? '#0d1a10' : C.card,
@@ -588,7 +713,6 @@ function ProcedureTab({ onCompleteCase, onNavigate }) {
               borderRadius: 12, padding: '14px 16px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {/* Number circle */}
                 <div
                   onClick={() => toggleStep(step.id)}
                   style={{
@@ -603,9 +727,8 @@ function ProcedureTab({ onCompleteCase, onNavigate }) {
                 >
                   {done ? '✓' : step.id}
                 </div>
-
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <div style={{ marginBottom: 3 }}>
                     <span style={{
                       fontSize: 10, fontWeight: 700, color: pc,
                       background: pc + '22', borderRadius: 4, padding: '1px 6px',
@@ -614,7 +737,6 @@ function ProcedureTab({ onCompleteCase, onNavigate }) {
                   <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{step.title}</div>
                   <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{step.hint}</div>
                 </div>
-
                 <button
                   onClick={() => setTimerItem(step)}
                   style={{
@@ -632,7 +754,6 @@ function ProcedureTab({ onCompleteCase, onNavigate }) {
         })}
       </div>
 
-      {/* Complete button */}
       {allDone && (
         <button
           onClick={handleComplete}
@@ -663,14 +784,14 @@ function ProcedureTab({ onCompleteCase, onNavigate }) {
 // ============================================================
 
 function ReflectionTab({ data, onSaveNote }) {
-  const [selectedCase, setSelectedCase] = useState(null);
-  const [date, setDate]           = useState(todayStr());
-  const [good, setGood]           = useState('');
-  const [improve, setImprove]     = useState('');
-  const [keywords, setKeywords]   = useState('');
-  const [nextAction, setNextAction] = useState('');
-  const [saved, setSaved]         = useState(false);
-  const [selectedNote, setSelectedNote] = useState(null);
+  const [selectedCase,  setSelectedCase]  = useState(null);
+  const [date,          setDate]          = useState(todayStr());
+  const [good,          setGood]          = useState('');
+  const [improve,       setImprove]       = useState('');
+  const [keywords,      setKeywords]      = useState('');
+  const [nextAction,    setNextAction]    = useState('');
+  const [saved,         setSaved]         = useState(false);
+  const [selectedNote,  setSelectedNote]  = useState(null);
 
   function handleSave() {
     if (!selectedCase) return;
@@ -690,7 +811,6 @@ function ReflectionTab({ data, onSaveNote }) {
     setSelectedNote(null);
   }
 
-  // Note detail view
   if (selectedNote) {
     return (
       <div style={{ padding: '16px 16px 80px' }}>
@@ -704,10 +824,9 @@ function ReflectionTab({ data, onSaveNote }) {
             <div style={{ fontSize: 12, color: C.muted }}>{selectedNote.date} · {selectedNote.time}</div>
           </div>
         </div>
-
         {[
           { label: 'よかった点',    value: selectedNote.good,       color: C.green  },
-          { label: '改善点',       value: selectedNote.improve,    color: C.orange },
+          { label: '改善点',        value: selectedNote.improve,    color: C.orange },
           { label: '重要キーワード', value: selectedNote.keywords,   color: C.accent },
           { label: '次回やること',  value: selectedNote.nextAction, color: C.purple },
         ].filter(f => f.value).map(f => (
@@ -719,7 +838,6 @@ function ReflectionTab({ data, onSaveNote }) {
             <div style={{ fontSize: 14, color: C.text, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{f.value}</div>
           </div>
         ))}
-
         <button
           onClick={() => handleDelete(selectedNote.id)}
           style={{
@@ -737,7 +855,7 @@ function ReflectionTab({ data, onSaveNote }) {
 
   const ta = {
     width: '100%', padding: 12, background: '#1f2937',
-    border: `1px solid #374151`, borderRadius: 8,
+    border: '1px solid #374151', borderRadius: 8,
     color: C.text, fontSize: 14, resize: 'vertical',
     minHeight: 80, fontFamily: 'inherit', boxSizing: 'border-box',
     outline: 'none',
@@ -745,7 +863,6 @@ function ReflectionTab({ data, onSaveNote }) {
 
   return (
     <div style={{ padding: '16px 16px 80px' }}>
-      {/* Case selector */}
       <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>事例を選択</div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
         {CASES.map(c => (
@@ -765,7 +882,6 @@ function ReflectionTab({ data, onSaveNote }) {
         ))}
       </div>
 
-      {/* Date */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>解いた日付</div>
         <input
@@ -778,10 +894,9 @@ function ReflectionTab({ data, onSaveNote }) {
         />
       </div>
 
-      {/* Text fields */}
       {[
         { label: '✅ よかった点',    value: good,       setter: setGood,       color: C.green  },
-        { label: '🔧 改善点',       value: improve,    setter: setImprove,    color: C.orange },
+        { label: '🔧 改善点',        value: improve,    setter: setImprove,    color: C.orange },
         { label: '🔑 重要キーワード', value: keywords,   setter: setKeywords,   color: C.accent },
         { label: '🎯 次回やること',  value: nextAction, setter: setNextAction, color: C.purple },
       ].map(f => (
@@ -813,7 +928,6 @@ function ReflectionTab({ data, onSaveNote }) {
         {saved ? '✓ 保存しました' : '保存'}
       </button>
 
-      {/* Saved notes */}
       {data.notes.length > 0 && (
         <>
           <div style={{ fontSize: 13, color: C.muted, margin: '20px 0 8px' }}>
@@ -848,45 +962,118 @@ function ReflectionTab({ data, onSaveNote }) {
 // HistoryTab
 // ============================================================
 
-function HistoryTab({ history }) {
-  const recent = [...history].slice(-40).reverse();
+function HistoryTab({ data }) {
+  const history        = data.history || [];
+  const recent         = [...history].slice(-40).reverse();
+  const totalSeconds   = history.reduce((sum, item) => sum + (item.elapsed || 0), 0);
+  const caseClears     = history.filter(item => (item.name || '').includes('クリア')).length;
+  const weeklyXpHistory = data.weeklyXpHistory || [];
+  const currentWeekXp  = (data.weeklyXpData || []).reduce((a, b) => a + b, 0);
 
-  if (!recent.length) {
-    return (
-      <div style={{ padding: '80px 16px', textAlign: 'center', color: C.muted }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>📜</div>
-        <div style={{ fontSize: 16 }}>まだ履歴がありません</div>
-        <div style={{ fontSize: 13, marginTop: 8 }}>クエストを完了すると表示されます</div>
-      </div>
-    );
-  }
+  // Build chart: past weeks + current week (only if there's something to show)
+  const chartWeeks = [...weeklyXpHistory.slice(-4), currentWeekXp];
+  const maxWkXp    = Math.max(...chartWeeks, 1);
+  const showChart  = chartWeeks.some(v => v > 0);
 
   return (
     <div style={{ padding: '16px 16px 80px' }}>
-      <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>
-        完了タスク（最新{recent.length}件）
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {recent.map((item, i) => (
-          <div key={i} style={{
-            background: C.card, border: `1px solid ${C.border}`,
-            borderRadius: 12, padding: '12px 16px',
-            display: 'flex', alignItems: 'center', gap: 12,
+      {/* Statistics section */}
+      <div style={{
+        background: C.card, border: `1px solid ${C.border}`,
+        borderRadius: 14, padding: 16, marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>📊 学習統計</div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: showChart ? 16 : 0 }}>
+          <div style={{
+            background: C.accent + '11', border: `1px solid ${C.accent}33`,
+            borderRadius: 10, padding: '10px 12px',
           }}>
-            <div style={{ fontSize: 22 }}>{item.icon || '✅'}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{item.name}</div>
-              <div style={{ fontSize: 12, color: C.muted }}>{item.time}</div>
-            </div>
-            <div style={{
-              fontSize: 13, fontWeight: 700, color: C.gold,
-              background: C.gold + '22', borderRadius: 8, padding: '3px 8px',
-            }}>
-              +{item.xp}
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>⏱ 総学習時間</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.accent }}>
+              {totalSeconds > 0 ? formatStudyTime(totalSeconds) : '—'}
             </div>
           </div>
-        ))}
+          <div style={{
+            background: C.gold + '11', border: `1px solid ${C.gold}33`,
+            borderRadius: 10, padding: '10px 12px',
+          }}>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>🎯 事例クリア</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.gold }}>{caseClears}回</div>
+          </div>
+        </div>
+
+        {showChart && (
+          <>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>週別XP推移</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 64 }}>
+              {chartWeeks.map((xp, i) => {
+                const isCurrent = i === chartWeeks.length - 1;
+                const weeksAgo  = chartWeeks.length - 1 - i;
+                const label     = isCurrent ? '今週' : `${weeksAgo}週前`;
+                return (
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <div style={{ fontSize: 9, color: C.muted, minHeight: 12 }}>{xp > 0 ? xp : ''}</div>
+                    <div style={{
+                      width: '100%',
+                      height: `${Math.max((xp / maxWkXp) * 40, 3)}px`,
+                      background: isCurrent
+                        ? `linear-gradient(180deg, ${C.accent}, ${C.purple})`
+                        : C.muted + '55',
+                      borderRadius: 3,
+                    }} />
+                    <div style={{
+                      fontSize: 9,
+                      color: isCurrent ? C.accent : C.muted,
+                      fontWeight: isCurrent ? 700 : 400,
+                    }}>
+                      {label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
+
+      {/* History list */}
+      {recent.length === 0 ? (
+        <div style={{ padding: '60px 0', textAlign: 'center', color: C.muted }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📜</div>
+          <div style={{ fontSize: 16 }}>まだ履歴がありません</div>
+          <div style={{ fontSize: 13, marginTop: 8 }}>クエストを完了すると表示されます</div>
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>
+            完了タスク（最新{recent.length}件）
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {recent.map((item, i) => (
+              <div key={i} style={{
+                background: C.card, border: `1px solid ${C.border}`,
+                borderRadius: 12, padding: '12px 16px',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <div style={{ fontSize: 22 }}>{item.icon || '✅'}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{item.name}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>
+                    {item.time}{item.elapsed ? ` · ${formatStudyTime(item.elapsed)}` : ''}
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: 13, fontWeight: 700, color: C.gold,
+                  background: C.gold + '22', borderRadius: 8, padding: '3px 8px',
+                }}>
+                  +{item.xp}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -895,12 +1082,12 @@ function HistoryTab({ history }) {
 // BottomNav
 // ============================================================
 
-function BottomNav({ active, onChange }) {
+function BottomNav({ active, onChange, remainingCount }) {
   const tabs = [
     { id: 'quest',      label: 'クエスト', icon: '⚔️' },
-    { id: 'procedure',  label: '手順',    icon: '📋' },
+    { id: 'procedure',  label: '手順',     icon: '📋' },
     { id: 'reflection', label: '振り返り', icon: '📝' },
-    { id: 'history',    label: '履歴',    icon: '📜' },
+    { id: 'history',    label: '履歴',     icon: '📜' },
   ];
 
   return (
@@ -922,7 +1109,20 @@ function BottomNav({ active, onChange }) {
             borderTop: active === tab.id ? `2px solid ${C.accent}` : '2px solid transparent',
           }}
         >
-          <span style={{ fontSize: 18 }}>{tab.icon}</span>
+          <div style={{ position: 'relative', display: 'inline-flex' }}>
+            <span style={{ fontSize: 18 }}>{tab.icon}</span>
+            {tab.id === 'quest' && remainingCount > 0 && (
+              <div style={{
+                position: 'absolute', top: -4, right: -8,
+                background: C.red, borderRadius: '50%',
+                minWidth: 16, height: 16, padding: '0 2px',
+                fontSize: 10, fontWeight: 700, color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {remainingCount}
+              </div>
+            )}
+          </div>
           <span style={{ fontSize: 10, fontWeight: active === tab.id ? 700 : 400 }}>
             {tab.label}
           </span>
@@ -937,44 +1137,57 @@ function BottomNav({ active, onChange }) {
 // ============================================================
 
 export default function App() {
-  const [tab, setTab]         = useState('quest');
-  const [data, setData]       = useState(() => applyDateReset(loadData()));
-  const [reward, setReward]   = useState(null);
+  const [tab,      setTab]      = useState('quest');
+  const [data,     setData]     = useState(() => applyDateReset(loadData()));
+  const [reward,   setReward]   = useState(null);
   const [particles, setParticles] = useState(null);
+  const [levelUp,  setLevelUp]  = useState(null);
 
   function commit(newData) {
     setData(newData);
     saveData(newData);
   }
 
-  function buildHistoryItem(icon, name, xp) {
-    return { icon, name, xp, time: formatDateTime() };
+  function buildHistoryItem(icon, name, xp, elapsed) {
+    const item = { icon, name, xp, time: formatDateTime() };
+    if (elapsed != null && elapsed > 0) item.elapsed = elapsed;
+    return item;
   }
 
   function applyXpGain(base, xp, historyItem) {
-    const today = todayStr();
+    const today     = todayStr();
     const weekStart = getWeekStart();
-    const dayIdx = getDayIndex();
+    const dayIdx    = getDayIndex();
     let d = { ...base };
 
     if (d.weekStart !== weekStart) {
-      d.weeklyData = [0, 0, 0, 0, 0, 0, 0];
-      d.weekStart = weekStart;
+      const currentWeekXp = (d.weeklyXpData || []).reduce((a, b) => a + b, 0);
+      if (currentWeekXp > 0) {
+        const wh = [...(d.weeklyXpHistory || []), currentWeekXp];
+        d.weeklyXpHistory = wh.slice(-8);
+      }
+      d.weeklyData   = [0, 0, 0, 0, 0, 0, 0];
+      d.weeklyXpData = [0, 0, 0, 0, 0, 0, 0];
+      d.weekStart    = weekStart;
     }
     if (d.lastDate !== today) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      d.streak = d.lastDate === yesterday.toISOString().slice(0, 10) ? (d.streak || 0) + 1 : 0;
+      d.streak = d.lastDate === localDateStr(yesterday) ? (d.streak || 0) + 1 : 0;
       d.completedToday = [];
     }
 
-    d.xp = (d.xp || 0) + xp;
+    d.xp         = (d.xp || 0) + xp;
     d.totalTasks = (d.totalTasks || 0) + 1;
-    d.lastDate = today;
+    d.lastDate   = today;
 
-    const weekly = [...(d.weeklyData || [0,0,0,0,0,0,0])];
+    const weekly = [...(d.weeklyData || [0, 0, 0, 0, 0, 0, 0])];
     weekly[dayIdx] = (weekly[dayIdx] || 0) + 1;
     d.weeklyData = weekly;
+
+    const xpData = [...(d.weeklyXpData || [0, 0, 0, 0, 0, 0, 0])];
+    xpData[dayIdx] = (xpData[dayIdx] || 0) + xp;
+    d.weeklyXpData = xpData;
 
     const hist = [...(d.history || []), historyItem];
     d.history = hist.length > 40 ? hist.slice(-40) : hist;
@@ -982,24 +1195,30 @@ export default function App() {
     return d;
   }
 
-  function handleCompleteQuest(quest) {
+  function handleCompleteQuest(quest, elapsed) {
     if (data.completedToday.includes(quest.id)) return;
-
-    const hi = buildHistoryItem(quest.icon, quest.name, quest.xp);
+    const prevLevel = getLevel(data.xp);
+    const hi = buildHistoryItem(quest.icon, quest.name, quest.xp, elapsed);
     let d = applyXpGain(data, quest.xp, hi);
     d.completedToday = [...(d.completedToday || []), quest.id];
     commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
     setReward({ icon: quest.icon, title: quest.name, xp: quest.xp, message: 'クエスト完了！' });
     setParticles(quest.xp);
   }
 
   function handleCompleteCase(caseItem) {
-    const xp = 100;
+    const xp        = 100;
+    const prevLevel = getLevel(data.xp);
     const hi = buildHistoryItem('🎯', `${caseItem.full} クリア`, xp);
-    const d = applyXpGain(data, xp, hi);
+    const d  = applyXpGain(data, xp, hi);
     commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
     setReward({ icon: '🎯', title: `${caseItem.full} クリア！`, xp, message: '手順ガイド完了！' });
     setParticles(xp);
+    navigator.vibrate?.([100, 50, 100]);
   }
 
   function handleSaveNote(note, deleteId) {
@@ -1011,6 +1230,12 @@ export default function App() {
     }
     commit({ ...data, notes });
   }
+
+  function handleUpdateProcedure(updates) {
+    commit({ ...data, ...updates });
+  }
+
+  const remainingQuests = QUESTS.filter(q => !data.completedToday.includes(q.id)).length;
 
   return (
     <div style={{
@@ -1029,16 +1254,29 @@ export default function App() {
         <div style={{ fontSize: 15, color: C.gold, fontWeight: 700 }}>{data.xp} XP</div>
       </div>
 
-      {/* Tab content */}
-      {tab === 'quest'      && <QuestTab      data={data} onCompleteQuest={handleCompleteQuest} onNavigate={setTab} />}
-      {tab === 'procedure'  && <ProcedureTab  onCompleteCase={handleCompleteCase} onNavigate={setTab} />}
-      {tab === 'reflection' && <ReflectionTab data={data} onSaveNote={handleSaveNote} />}
-      {tab === 'history'    && <HistoryTab    history={data.history} />}
+      {tab === 'quest' && (
+        <QuestTab data={data} onCompleteQuest={handleCompleteQuest} onNavigate={setTab} />
+      )}
+      {tab === 'procedure' && (
+        <ProcedureTab
+          data={data}
+          onCompleteCase={handleCompleteCase}
+          onNavigate={setTab}
+          onUpdateProcedure={handleUpdateProcedure}
+        />
+      )}
+      {tab === 'reflection' && (
+        <ReflectionTab data={data} onSaveNote={handleSaveNote} />
+      )}
+      {tab === 'history' && (
+        <HistoryTab data={data} />
+      )}
 
-      <BottomNav active={tab} onChange={setTab} />
+      <BottomNav active={tab} onChange={setTab} remainingCount={remainingQuests} />
 
-      {reward   && <RewardPopup reward={reward} onClose={() => setReward(null)} />}
-      {particles && <XPParticles xp={particles} onDone={() => setParticles(null)} />}
+      {reward   && <RewardPopup  reward={reward}  onClose={() => setReward(null)}   />}
+      {particles && <XPParticles xp={particles}   onDone={() => setParticles(null)} />}
+      {levelUp  && <LevelUpModal level={levelUp}  onClose={() => setLevelUp(null)}  />}
     </div>
   );
 }
