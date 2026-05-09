@@ -493,11 +493,314 @@ const FINANCE_PROBLEMS = [
       },
     ],
   },
+  // ===== 応用問題 =====
+  {
+    id: 'cvp_adv_01', type: 'cvp', title: '特殊注文の受否判断（増分分析）', icon: '📋',
+    xp: 100, partialXp: 20, difficulty: '応用',
+    intro: '工場に余剰生産能力あり。通常販売価格4,000円（変動費2,000円）の製品に対し、特別注文（2,500円/個×100個）が来た。月次固定費200万円。受け入れるべきか。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】特殊注文1個あたりの限界利益を求めよ。',
+        choices: [
+          'A. 500円　（特殊注文単価2,500 − 変動費2,000）',
+          'B. 2,000円　（通常価格4,000 − 特殊注文価格2,000）',
+          'C. 1,500円　（変動費のみ）',
+          'D. −1,500円　（通常価格4,000 − 特殊注文2,500 − 変動費500）',
+        ],
+        correct: 0,
+        explanation: '特殊注文の限界利益 ＝ 特殊注文単価 − 変動費 ＝ 2,500 − 2,000 ＝ 500円。関連するのは変動費のみ。',
+      },
+      {
+        id: 2, question: '【Step 2】固定費200万円の扱いとして正しいものを選べ。',
+        choices: [
+          'A. 埋没原価として意思決定に含めない（どちらの選択でも発生する）',
+          'B. 特殊注文のコストに100個で按分して加算する',
+          'C. 特殊注文を受けると固定費が増加するため加算する',
+          'D. 固定費を回収できる量だけ受け入れる',
+        ],
+        correct: 0,
+        explanation: '余剰能力がある場合、固定費はすでに発生しており意思決定に無関係な埋没原価。増分分析では変動費のみが関連原価。',
+      },
+      {
+        id: 3, question: '【Step 3】余剰能力がある前提で特殊注文全体の増分利益を求め、受否を判断せよ。',
+        choices: [
+          'A. ＋5万円（500円 × 100個）→ 受け入れる',
+          'B. −15万円（固定費200万を按分）→ 断る',
+          'C. ＋25万円（特殊注文売上のみ）→ 受け入れる',
+          'D. 0円（利益変化なし）→ どちらでもよい',
+        ],
+        correct: 0,
+        explanation: '増分利益 ＝ 500円 × 100個 ＝ 5万円 > 0。固定費は無関係。余剰能力があれば増分利益が正の注文は受け入れるべき。',
+      },
+      {
+        id: 4, question: '【Step 4】もし余剰能力がなく既存販売100個を減らす必要があった場合、この特殊注文を受けるべきか。',
+        choices: [
+          'A. 断る（機会原価20万 > 特殊注文増分利益5万）',
+          'B. 受け入れる（依然として増分利益が正）',
+          'C. 受け入れる（既存販売の減少は関係ない）',
+          'D. 条件次第（価格交渉次第）',
+        ],
+        correct: 0,
+        explanation: '機会原価 ＝ 既存販売の限界利益 ＝（4,000 − 2,000）× 100個 ＝ 20万円。増分利益5万 < 機会原価20万 なので断るべき。能力制約がある場合は機会原価を考慮する。',
+      },
+    ],
+  },
+  {
+    id: 'npv_adv_01', type: 'npv', title: 'タックスシールドを含むNPV計算', icon: '🛡️',
+    xp: 110, partialXp: 22, difficulty: '応用',
+    intro: '初期投資3,000万円、耐用年数5年（残存価値0・定額法）、税引前年間CF 900万円、法人税率30%、割引率8%。年金現価係数（5年・8%）＝ 3.993。タックスシールドを考慮してNPVを求めよ。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】年間減価償却費を求めよ。',
+        choices: [
+          'A. 600万円　（取得原価3,000 ÷ 耐用年数5年）',
+          'B. 900万円　（税引前CFと同額）',
+          'C. 300万円　（3,000 × 10%）',
+          'D. 500万円　（3,000 ÷ 6）',
+        ],
+        correct: 0,
+        explanation: '定額法：減価償却費 ＝ 取得原価 ÷ 耐用年数 ＝ 3,000 ÷ 5 ＝ 600万円。残存価値0なのでそのまま割り算。',
+      },
+      {
+        id: 2, question: '【Step 2】タックスシールドを考慮した税引後年間CFを求めよ。公式：税引後CF ＝ 税引前CF×(1−t) ＋ 減価償却費×t',
+        choices: [
+          'A. 810万円　（900×0.7 ＋ 600×0.3 ＝ 630＋180）',
+          'B. 630万円　（900×0.7 のみ、タックスシールド無視）',
+          'C. 870万円　（900×0.97 の誤計算）',
+          'D. 900万円　（税金を無視）',
+        ],
+        correct: 0,
+        explanation: '税引後CF ＝ 900×0.7 ＋ 600×0.3 ＝ 630 ＋ 180 ＝ 810万円。減価償却費×税率 が「タックスシールド（節税額）」。現金支出なしに税金が減る効果。',
+      },
+      {
+        id: 3, question: '【Step 3】5年間のCF現在価値合計を求めよ。',
+        choices: [
+          'A. 3,234.3万円　（810 × 3.993）',
+          'B. 3,593.7万円　（900 × 3.993、税引前CFを使用）',
+          'C. 2,515.6万円　（630 × 3.993）',
+          'D. 4,500万円　（900 × 5年、割引なし）',
+        ],
+        correct: 0,
+        explanation: 'CF現在価値合計 ＝ 税引後CF × 年金現価係数 ＝ 810 × 3.993 ＝ 3,234.3万円。必ず税引後CFを使うこと。',
+      },
+      {
+        id: 4, question: '【Step 4】NPVを求め、投資の可否を判断せよ。',
+        choices: [
+          'A. ＋234.3万円　→ 投資採択（3,234.3 − 3,000）',
+          'B. −406.3万円　→ 投資棄却（計算ミス）',
+          'C. ＋593.7万円　→ 投資採択（税引前CFで計算）',
+          'D. −300万円　→ 投資棄却（初期投資のみ考慮）',
+        ],
+        correct: 0,
+        explanation: 'NPV ＝ 3,234.3 − 3,000 ＝ ＋234.3万円 > 0 → 投資採択。タックスシールドを含めることで、含めない場合（NPV ＝ 630×3.993−3,000 ＝ −483.4万円）と判断が逆転する点が重要。',
+      },
+    ],
+  },
+  {
+    id: 'ratio_adv_01', type: 'ratio', title: 'WACC（加重平均資本コスト）の計算', icon: '⚖️',
+    xp: 110, partialXp: 22, difficulty: '応用',
+    intro: '借入金8,000万円（年利率5%）、株式の時価総額1億2,000万円（株主資本コスト12%）、法人税率30%。WACCを求めよ。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】税引後負債コストを求めよ。',
+        choices: [
+          'A. 3.5%　（5% × (1 − 0.30)）',
+          'B. 5.0%　（税効果を無視）',
+          'C. 1.5%　（5% × 0.30 のみ）',
+          'D. 3.0%　（5% − 2% の誤計算）',
+        ],
+        correct: 0,
+        explanation: '税引後負債コスト ＝ 利率 × (1 − 税率) ＝ 5% × 0.70 ＝ 3.5%。利息は損金算入できるため実質コストは低くなる。',
+      },
+      {
+        id: 2, question: '【Step 2】資本構成の重みを求めよ。（総資本 ＝ 8,000 ＋ 12,000 ＝ 2億円）',
+        choices: [
+          'A. 負債40%・自己資本60%　（各 ÷ 総資本2億）',
+          'B. 負債50%・自己資本50%　（単純平均）',
+          'C. 負債60%・自己資本40%　（逆転）',
+          'D. 負債33%・自己資本67%　（帳簿価額ベースの誤り）',
+        ],
+        correct: 0,
+        explanation: '負債比率 ＝ 8,000 ÷ 20,000 ＝ 40%、自己資本比率 ＝ 12,000 ÷ 20,000 ＝ 60%。WACCは時価ベースの加重平均。',
+      },
+      {
+        id: 3, question: '【Step 3】WACCを求めよ。',
+        choices: [
+          'A. 8.6%　（3.5%×0.40 ＋ 12%×0.60 ＝ 1.4＋7.2）',
+          'B. 7.75%　（税効果なしの5%×0.40 ＋ 12%×0.60）',
+          'C. 8.5%　（(5%＋12%)÷2）',
+          'D. 7.0%　（3.5%＋12% の誤った平均）',
+        ],
+        correct: 0,
+        explanation: 'WACC ＝ 税引後負債コスト×負債比率 ＋ 株主資本コスト×自己資本比率 ＝ 3.5%×0.40 ＋ 12%×0.60 ＝ 1.4% ＋ 7.2% ＝ 8.6%。',
+      },
+      {
+        id: 4, question: '【Step 4】このWACCの活用方法として正しいものを選べ。',
+        choices: [
+          'A. NPV計算の割引率として使用する（企業全体のリスクを反映）',
+          'B. 株主への配当率として使用する',
+          'C. 借入金利の上限として使用する',
+          'D. 損益分岐点の計算に使用する',
+        ],
+        correct: 0,
+        explanation: 'WACCは企業全体の資本コストであり、投資プロジェクトのNPV計算における割引率として使用する。プロジェクトの収益率がWACCを上回れば企業価値が創造される。',
+      },
+    ],
+  },
+  {
+    id: 'cvp_adv_02', type: 'cvp', title: '内製vs外注（Make or Buy）の意思決定', icon: '🏭',
+    xp: 100, partialXp: 20, difficulty: '応用',
+    intro: '部品Xを月1,000個内製中。変動費1,200円/個、固定費総額120万円/月（うち60万円は外注時に回避可能）。外注価格1,500円/個。どちらが有利か。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】内製の「関連コスト」（意思決定に影響するコスト）を計算せよ。',
+        choices: [
+          'A. 180万円　（変動費120万 ＋ 回避可能固定費60万）',
+          'B. 240万円　（変動費120万 ＋ 固定費全額120万）',
+          'C. 120万円　（変動費のみ）',
+          'D. 60万円　（回避可能固定費のみ）',
+        ],
+        correct: 0,
+        explanation: '関連コスト ＝ 変動費 ＋ 回避可能固定費 ＝ 1,200×1,000 ＋ 60万 ＝ 120万 ＋ 60万 ＝ 180万円。回避できない固定費60万は埋没原価で無関係。',
+      },
+      {
+        id: 2, question: '【Step 2】外注コスト合計を計算せよ。',
+        choices: [
+          'A. 150万円　（1,500円 × 1,000個）',
+          'B. 210万円　（外注150万 ＋ 残存固定費60万）',
+          'C. 120万円　（1,200円 × 1,000個）',
+          'D. 180万円　（内製の関連コストと同額と仮定）',
+        ],
+        correct: 0,
+        explanation: '外注コスト ＝ 外注単価 × 数量 ＝ 1,500円 × 1,000個 ＝ 150万円。残存固定費60万はどちらを選んでも発生するため比較に含めない。',
+      },
+      {
+        id: 3, question: '【Step 3】差額分析の結果と意思決定を選べ。',
+        choices: [
+          'A. 外注が30万円有利　（外注150万 < 内製関連コスト180万）',
+          'B. 内製が30万円有利　（固定費全額を含めた誤り）',
+          'C. 損得なし（差額ゼロ）',
+          'D. 内製が90万円有利　（変動費のみで比較）',
+        ],
+        correct: 0,
+        explanation: '差額 ＝ 内製関連コスト180万 − 外注コスト150万 ＝ 30万円。外注の方が30万円有利。意思決定では埋没原価（回避不能固定費60万）を除いた関連コストのみで比較する。',
+      },
+      {
+        id: 4, question: '【Step 4】外注後も残る回避不能な固定費60万円の正しい扱いを選べ。',
+        choices: [
+          'A. 埋没原価として意思決定に含めない（どちらを選んでも発生する）',
+          'B. 外注コストに加算して比較する（全コストを考慮）',
+          'C. 内製コストから差し引く（節約できると考える）',
+          'D. 外注価格の値下げ交渉の根拠にする',
+        ],
+        correct: 0,
+        explanation: '回避不能な固定費は埋没原価（Sunk Cost）であり、意思決定に含めてはならない。含めてしまうと正しい判断ができなくなる。埋没原価の概念は試験頻出。',
+      },
+    ],
+  },
+  {
+    id: 'cashflow_adv_01', type: 'cashflow', title: 'キャッシュコンバージョンサイクル（CCC）', icon: '⏰',
+    xp: 100, partialXp: 20, difficulty: '応用',
+    intro: '売上高3,600万円（全額掛売）、売上原価2,400万円（全額掛仕入）、売上債権360万円、棚卸資産200万円、仕入債務160万円。CCCを求めよ（1年＝360日）。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】売上債権回転日数を求めよ。（売上債権 × 360 ÷ 売上高）',
+        choices: [
+          'A. 36日　（360 × 360 ÷ 3,600）',
+          'B. 30日　（200 × 360 ÷ 2,400、棚卸資産と混同）',
+          'C. 24日　（160 × 360 ÷ 2,400、仕入債務と混同）',
+          'D. 10日　（3,600 ÷ 360）',
+        ],
+        correct: 0,
+        explanation: '売上債権回転日数 ＝ 売上債権360万 × 360日 ÷ 売上高3,600万 ＝ 36日。売上代金の回収までに平均36日かかることを示す。',
+      },
+      {
+        id: 2, question: '【Step 2】棚卸資産回転日数を求めよ。（棚卸資産 × 360 ÷ 売上原価）',
+        choices: [
+          'A. 30日　（200 × 360 ÷ 2,400）',
+          'B. 20日　（200 × 360 ÷ 3,600、売上高を誤使用）',
+          'C. 36日　（売上債権の値と混同）',
+          'D. 24日　（仕入債務の値と混同）',
+        ],
+        correct: 0,
+        explanation: '棚卸資産回転日数 ＝ 棚卸資産200万 × 360日 ÷ 売上原価2,400万 ＝ 30日。在庫として滞留する平均日数。分母は売上高でなく売上原価を使う。',
+      },
+      {
+        id: 3, question: '【Step 3】仕入債務回転日数を求めよ。（仕入債務 × 360 ÷ 売上原価）',
+        choices: [
+          'A. 24日　（160 × 360 ÷ 2,400）',
+          'B. 16日　（160 × 360 ÷ 3,600、売上高を誤使用）',
+          'C. 30日　（棚卸資産の値と混同）',
+          'D. 40日　（160 × 360 ÷ 1,440 の誤算）',
+        ],
+        correct: 0,
+        explanation: '仕入債務回転日数 ＝ 仕入債務160万 × 360日 ÷ 売上原価2,400万 ＝ 24日。仕入代金の支払いまでの平均日数。長いほど企業に有利（支払いを猶予できる）。',
+      },
+      {
+        id: 4, question: '【Step 4】CCC（キャッシュコンバージョンサイクル）を求めよ。',
+        choices: [
+          'A. 42日　（売上債権36 ＋ 棚卸資産30 − 仕入債務24）',
+          'B. 90日　（三者の合計）',
+          'C. 66日　（仕入債務を加算してしまう誤り）',
+          'D. 6日　（36 − 30）',
+        ],
+        correct: 0,
+        explanation: 'CCC ＝ 売上債権回転日数 ＋ 棚卸資産回転日数 − 仕入債務回転日数 ＝ 36＋30−24 ＝ 42日。CCCが短いほど資金効率が高い。仕入債務はキャッシュアウトを遅らせるのでマイナス。',
+      },
+    ],
+  },
+  {
+    id: 'ratio_adv_02', type: 'ratio', title: 'EVA（経済的付加価値）の計算', icon: '💎',
+    xp: 110, partialXp: 22, difficulty: '応用',
+    intro: '税引後営業利益（NOPAT）600万円、投下資本5,000万円、WACC 10%。EVA（経済的付加価値）を求め、企業価値創造の有無を判断せよ。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】資本コスト（金額）を求めよ。',
+        choices: [
+          'A. 500万円　（投下資本5,000万 × WACC 10%）',
+          'B. 600万円　（NOPATと同額）',
+          'C. 50万円　（WACC 10% × 500万の誤計算）',
+          'D. 5,000万円　（投下資本そのまま）',
+        ],
+        correct: 0,
+        explanation: '資本コスト（金額）＝ 投下資本 × WACC ＝ 5,000 × 0.10 ＝ 500万円。これが投資家が最低限期待するリターン。',
+      },
+      {
+        id: 2, question: '【Step 2】EVAを計算せよ。',
+        choices: [
+          'A. ＋100万円　（NOPAT600 − 資本コスト500）',
+          'B. ＋1,100万円　（600 ＋ 500 の誤り）',
+          'C. −100万円　（符号が逆）',
+          'D. 0円　（NOPATと資本コストが等しいと仮定）',
+        ],
+        correct: 0,
+        explanation: 'EVA ＝ NOPAT − 資本コスト ＝ 600 − 500 ＝ ＋100万円。EVA ＞ 0 であれば資本コストを超える利益を稼いでいる。',
+      },
+      {
+        id: 3, question: '【Step 3】EVA ＝ ＋100万円の解釈として正しいものを選べ。',
+        choices: [
+          'A. 企業価値を創造している（資本コストを上回る利益を獲得）',
+          'B. 企業価値を毀損している（利益が小さい）',
+          'C. 損益分岐点ちょうど（利益ゼロ）',
+          'D. 判断には株価情報が必要',
+        ],
+        correct: 0,
+        explanation: 'EVA > 0 ＝ 企業価値の創造。投資家が要求する収益率（WACC）を超えて稼いでいることを意味する。従来の会計利益ではなく資本コストを控除した「本当の利益」を示す。',
+      },
+      {
+        id: 4, question: '【Step 4】NOPATが480万円に減少した場合のEVAと判断を選べ。',
+        choices: [
+          'A. EVA ＝ −20万円　→ 企業価値を毀損している（480 − 500）',
+          'B. EVA ＝ ＋20万円　（符号を誤って逆転）',
+          'C. EVA ＝ 480万円　（資本コストを差し引かない）',
+          'D. EVA ＝ 0　（NOPATが下がればWACCも下がる）',
+        ],
+        correct: 0,
+        explanation: 'EVA ＝ 480 − 500 ＝ −20万円。EVA < 0 となり企業価値を毀損。会計上は黒字でもEVAが負なら投資家の期待を下回っている。この概念が試験で重要。',
+      },
+    ],
+  },
 ];
-
-// ============================================================
-// Utilities
-// ============================================================
 
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -1510,7 +1813,8 @@ function HistoryTab({ data }) {
 
 function FinanceTab({ data, onFinanceComplete }) {
   const [view, setView]                   = useState('list');
-  const [filterType, setFilterType]       = useState('all');
+  const [filterType, setFilterType]           = useState('all');
+  const [filterDifficulty, setFilterDifficulty] = useState('all');
   const [activeProblem, setActiveProblem] = useState(null);
   const [currentStep, setCurrentStep]     = useState(0);
   const [selectedChoice, setSelectedChoice] = useState(null);
@@ -1564,9 +1868,11 @@ function FinanceTab({ data, onFinanceComplete }) {
     { id: 'ratio', label: '財務比率' },
     { id: 'cashflow', label: 'CF計算' },
   ];
-  const filtered = filterType === 'all'
-    ? FINANCE_PROBLEMS
-    : FINANCE_PROBLEMS.filter(p => p.type === filterType);
+  const filtered = FINANCE_PROBLEMS.filter(p => {
+    const typeOk = filterType === 'all' || p.type === filterType;
+    const diffOk = filterDifficulty === 'all' || (p.difficulty || '基礎') === filterDifficulty;
+    return typeOk && diffOk;
+  });
 
   // ---- List view ----
   if (view === 'list') {
@@ -1578,7 +1884,7 @@ function FinanceTab({ data, onFinanceComplete }) {
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>ステップ別選択問題</div>
 
         {/* Type filter */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
           {filterTypes.map(ft => (
             <button
               key={ft.id}
@@ -1591,6 +1897,27 @@ function FinanceTab({ data, onFinanceComplete }) {
                 cursor: 'pointer', fontSize: 12,
               }}
             >{ft.label}</button>
+          ))}
+        </div>
+
+        {/* Difficulty filter */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+          {[
+            { id: 'all', label: 'すべて' },
+            { id: '基礎', label: '⭐ 基礎' },
+            { id: '応用', label: '⭐⭐ 応用' },
+          ].map(df => (
+            <button
+              key={df.id}
+              onClick={() => setFilterDifficulty(df.id)}
+              style={{
+                padding: '5px 12px', borderRadius: 20, border: 'none',
+                background: filterDifficulty === df.id ? C.gold : C.card,
+                color: filterDifficulty === df.id ? '#000' : C.muted,
+                fontWeight: filterDifficulty === df.id ? 700 : 400,
+                cursor: 'pointer', fontSize: 12,
+              }}
+            >{df.label}</button>
           ))}
         </div>
 
@@ -1617,6 +1944,12 @@ function FinanceTab({ data, onFinanceComplete }) {
                       fontSize: 10, fontWeight: 700, color: typeColor,
                       background: typeColor + '22', borderRadius: 4, padding: '2px 6px',
                     }}>{FINANCE_TYPE_LABELS[p.type]}</span>
+                    {p.difficulty === '応用' && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, color: C.gold,
+                        background: C.gold + '22', borderRadius: 4, padding: '2px 6px',
+                      }}>⭐⭐ 応用</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{p.title}</div>
                   <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
