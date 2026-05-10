@@ -2413,8 +2413,20 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
     setSolverDone(false);
   }
 
+  function shuffleProblem(problem) {
+    const steps = problem.steps.map(step => {
+      const items = step.choices.map((c, i) => ({ c, isCorrect: i === step.correct }));
+      for (let i = items.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [items[i], items[j]] = [items[j], items[i]];
+      }
+      return { ...step, choices: items.map(x => x.c), correct: items.findIndex(x => x.isCorrect) };
+    });
+    return { ...problem, steps };
+  }
+
   function startProblem(problem) {
-    setActiveProblem(problem);
+    setActiveProblem(shuffleProblem(problem));
     resetSolver();
     setView('solver');
   }
