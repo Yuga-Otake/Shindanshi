@@ -1454,6 +1454,7 @@ const DEFAULT_DATA = {
   notes: [],
   financeProgress: {},
   caseProgress: {},
+  dailyLog: {},
   procedureCase:    null,
   procedureChecked: [],
 };
@@ -2274,116 +2275,318 @@ function ReflectionTab({ data, onSaveNote }) {
 // ============================================================
 
 function HistoryTab({ data }) {
-  const history        = data.history || [];
-  const recent         = [...history].slice(-40).reverse();
-  const totalSeconds   = history.reduce((sum, item) => sum + (item.elapsed || 0), 0);
-  const caseClears     = history.filter(item => (item.name || '').includes('クリア')).length;
-  const weeklyXpHistory = data.weeklyXpHistory || [];
-  const currentWeekXp  = (data.weeklyXpData || []).reduce((a, b) => a + b, 0);
+  const [histView, setHistView]   = useState('calendar');
+  const [calMode, setCalMode]     = useState('month');
+  const [calMonth, setCalMonth]   = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(null);
 
-  // Build chart: past weeks + current week (only if there's something to show)
-  const chartWeeks = [...weeklyXpHistory.slice(-4), currentWeekXp];
-  const maxWkXp    = Math.max(...chartWeeks, 1);
-  const showChart  = chartWeeks.some(v => v > 0);
+  const history         = data.history || [];
+  const recent          = [...history].slice(-40).reverse();
+  const totalSeconds    = history.reduce((sum, item) => sum + (item.elapsed || 0), 0);
+  const caseClears      = history.filter(item => (item.name || '').includes('クリア')).length;
+  const weeklyXpHistory = data.weeklyXpHistory || [];
+  const currentWeekXp   = (data.weeklyXpData || []).reduce((a, b) => a + b, 0);
+  const chartWeeks      = [...weeklyXpHistory.slice(-4), currentWeekXp];
+  const maxWkXp         = Math.max(...chartWeeks, 1);
+  const showChart       = chartWeeks.some(v => v > 0);
+  const dailyLog        = data.dailyLog || {};
+  const todayKey        = todayStr();
+
+  function getDayColor(dateKey) {
+    const e = dailyLog[dateKey];
+    if (!e || e.tasks === 0) return '#1e293b';
+    if (e.tasks <= 2) return C.purple + '66';
+    if (e.tasks <= 5) return C.purple;
+    if (e.tasks <= 9) return C.accent + 'aa';
+    return C.gold;
+  }
+
+  // Monthly calendar grid
+  const year  = calMonth.getFullYear();
+  const month = calMonth.getMonth();
+  const firstDay    = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const calDays = [];
+  for (let i = 0; i < firstDay; i++) calDays.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dk = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    calDays.push({ dateKey: dk, day: d });
+  }
+
+  // Year heatmap: 53 weeks ending at today
+  function getYearGrid() {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - today.getDay() - 52 * 7);
+    const weeks = [];
+    let cur = new Date(start);
+    while (cur <= today || weeks.length < 53) {
+      const week = [];
+      for (let d = 0; d < 7; d++) {
+        week.push(cur <= today ? new Date(cur) : null);
+        cur.setDate(cur.getDate() + 1);
+      }
+      weeks.push(week);
+      if (cur > today && week.every(x => x === null || localDateStr(x) >= todayKey)) break;
+    }
+    return weeks;
+  }
+
+  function getMonthLabels(weeks) {
+    const labels = []; let lastM = -1;
+    weeks.forEach((week, wi) => {
+      const first = week.find(Boolean);
+      if (first) { const m = first.getMonth(); if (m !== lastM) { labels.push({ wi, label: `${m + 1}月` }); lastM = m; } }
+    });
+    return labels;
+  }
+
+  const yearWeeks = calMode === 'year' ? getYearGrid() : [];
 
   return (
     <div style={{ padding: '16px 16px 80px' }}>
-      {/* Statistics section */}
-      <div style={{
-        background: C.card, border: `1px solid ${C.border}`,
-        borderRadius: 14, padding: 16, marginBottom: 16,
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>📊 学習統計</div>
+      {/* View toggle */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {[{ id: 'calendar', label: '📅 カレンダー' }, { id: 'stats', label: '📊 統計' }, { id: 'list', label: '📋 履歴' }].map(v => (
+          <button key={v.id} onClick={() => setHistView(v.id)} style={{
+            flex: 1, padding: '8px 0', borderRadius: 20, border: 'none',
+            background: histView === v.id ? C.accent : C.card,
+            color: histView === v.id ? '#000' : C.muted,
+            fontWeight: histView === v.id ? 700 : 400,
+            cursor: 'pointer', fontSize: 12,
+          }}>{v.label}</button>
+        ))}
+      </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: showChart ? 16 : 0 }}>
-          <div style={{
-            background: C.accent + '11', border: `1px solid ${C.accent}33`,
-            borderRadius: 10, padding: '10px 12px',
-          }}>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>⏱ 総学習時間</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.accent }}>
-              {totalSeconds > 0 ? formatStudyTime(totalSeconds) : '—'}
-            </div>
+      {/* ---- CALENDAR VIEW ---- */}
+      {histView === 'calendar' && (
+        <div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, justifyContent: 'center' }}>
+            {[{ id: 'month', label: '月' }, { id: 'year', label: '年' }].map(m => (
+              <button key={m.id} onClick={() => { setCalMode(m.id); setSelectedDay(null); }} style={{
+                padding: '5px 24px', borderRadius: 20, border: 'none',
+                background: calMode === m.id ? C.purple : C.card,
+                color: calMode === m.id ? '#fff' : C.muted,
+                fontWeight: calMode === m.id ? 700 : 400,
+                cursor: 'pointer', fontSize: 13,
+              }}>{m.label}</button>
+            ))}
           </div>
-          <div style={{
-            background: C.gold + '11', border: `1px solid ${C.gold}33`,
-            borderRadius: 10, padding: '10px 12px',
-          }}>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>🎯 事例クリア</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.gold }}>{caseClears}回</div>
-          </div>
-        </div>
 
-        {showChart && (
-          <>
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>週別XP推移</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 64 }}>
-              {chartWeeks.map((xp, i) => {
-                const isCurrent = i === chartWeeks.length - 1;
-                const weeksAgo  = chartWeeks.length - 1 - i;
-                const label     = isCurrent ? '今週' : `${weeksAgo}週前`;
-                return (
-                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                    <div style={{ fontSize: 9, color: C.muted, minHeight: 12 }}>{xp > 0 ? xp : ''}</div>
-                    <div style={{
-                      width: '100%',
-                      height: `${Math.max((xp / maxWkXp) * 40, 3)}px`,
-                      background: isCurrent
-                        ? `linear-gradient(180deg, ${C.accent}, ${C.purple})`
-                        : C.muted + '55',
-                      borderRadius: 3,
-                    }} />
-                    <div style={{
-                      fontSize: 9,
-                      color: isCurrent ? C.accent : C.muted,
-                      fontWeight: isCurrent ? 700 : 400,
+          {/* Monthly calendar */}
+          {calMode === 'month' && (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <button onClick={() => { const d = new Date(calMonth); d.setMonth(d.getMonth() - 1); setCalMonth(d); setSelectedDay(null); }}
+                  style={{ background: 'none', border: 'none', color: C.accent, cursor: 'pointer', fontSize: 20, padding: '0 8px' }}>◀</button>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{year}年{month + 1}月</div>
+                <button onClick={() => { const d = new Date(calMonth); d.setMonth(d.getMonth() + 1); setCalMonth(d); setSelectedDay(null); }}
+                  style={{ background: 'none', border: 'none', color: C.accent, cursor: 'pointer', fontSize: 20, padding: '0 8px' }}>▶</button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+                {['日','月','火','水','木','金','土'].map((d, i) => (
+                  <div key={d} style={{ textAlign: 'center', fontSize: 10, padding: '2px 0',
+                    color: i === 0 ? '#ef4444' : i === 6 ? '#60a5fa' : C.muted }}>{d}</div>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+                {calDays.map((cell, i) => {
+                  if (!cell) return <div key={i} />;
+                  const { dateKey, day } = cell;
+                  const isToday    = dateKey === todayKey;
+                  const isSelected = selectedDay === dateKey;
+                  const e = dailyLog[dateKey];
+                  return (
+                    <div key={i} onClick={() => setSelectedDay(isSelected ? null : dateKey)} style={{
+                      aspectRatio: '1', borderRadius: 8,
+                      background: getDayColor(dateKey),
+                      border: `1.5px solid ${isSelected ? C.gold : isToday ? C.accent : 'transparent'}`,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer',
                     }}>
-                      {label}
+                      <div style={{ fontSize: 11, color: isToday ? C.accent : C.text, fontWeight: isToday ? 700 : 400 }}>{day}</div>
+                      {e && e.tasks > 0 && <div style={{ fontSize: 8, color: '#fff', opacity: 0.85 }}>{e.tasks}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {selectedDay && (() => {
+                const e = dailyLog[selectedDay];
+                const [, m, d] = selectedDay.split('-');
+                return (
+                  <div style={{ marginTop: 12, padding: '10px 14px', background: C.purple + '22', border: `1px solid ${C.purple}55`, borderRadius: 10 }}>
+                    {e && e.tasks > 0 ? (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 6 }}>{parseInt(m)}月{parseInt(d)}日</div>
+                        <div style={{ display: 'flex', gap: 16 }}>
+                          <div style={{ fontSize: 13, color: C.accent }}>✓ {e.tasks} タスク</div>
+                          <div style={{ fontSize: 13, color: C.gold }}>＋{e.xp} XP</div>
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 13, color: C.muted }}>{parseInt(m)}月{parseInt(d)}日 — 活動なし</div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Year heatmap */}
+          {calMode === 'year' && (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>過去1年の学習記録</div>
+              <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+                {(() => {
+                  const CELL = 11; const GAP = 2;
+                  const monthLabels = getMonthLabels(yearWeeks);
+                  return (
+                    <div style={{ display: 'inline-flex', gap: 0 }}>
+                      {/* Day labels */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: GAP, marginTop: 16, marginRight: 4 }}>
+                        {['日','月','火','水','木','金','土'].map((l, i) => (
+                          <div key={i} style={{ height: CELL, fontSize: 8, color: C.muted, lineHeight: `${CELL}px` }}>
+                            {i % 2 === 1 ? l : ''}
+                          </div>
+                        ))}
+                      </div>
+                      {/* Weeks */}
+                      <div>
+                        <div style={{ display: 'flex', gap: GAP, marginBottom: 2, height: 14 }}>
+                          {yearWeeks.map((_, wi) => {
+                            const ml = monthLabels.find(m => m.wi === wi);
+                            return (
+                              <div key={wi} style={{ width: CELL, fontSize: 8, color: C.muted, overflow: 'visible', whiteSpace: 'nowrap' }}>
+                                {ml ? ml.label : ''}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', gap: GAP }}>
+                          {yearWeeks.map((week, wi) => (
+                            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
+                              {week.map((date, di) => {
+                                if (!date) return <div key={di} style={{ width: CELL, height: CELL }} />;
+                                const dk = localDateStr(date);
+                                const isToday = dk === todayKey;
+                                return (
+                                  <div key={di} onClick={() => setSelectedDay(selectedDay === dk ? null : dk)} style={{
+                                    width: CELL, height: CELL, borderRadius: 2,
+                                    background: getDayColor(dk),
+                                    border: isToday ? `1px solid ${C.accent}` : selectedDay === dk ? `1px solid ${C.gold}` : 'none',
+                                    cursor: 'pointer',
+                                  }} />
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Legend */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                <div style={{ fontSize: 10, color: C.muted }}>少</div>
+                {['#1e293b', C.purple + '66', C.purple, C.accent + 'aa', C.gold].map((c, i) => (
+                  <div key={i} style={{ width: 11, height: 11, borderRadius: 2, background: c }} />
+                ))}
+                <div style={{ fontSize: 10, color: C.muted }}>多</div>
+              </div>
+
+              {selectedDay && dailyLog[selectedDay] && (() => {
+                const e = dailyLog[selectedDay];
+                const [, m, d] = selectedDay.split('-');
+                return (
+                  <div style={{ marginTop: 10, padding: '8px 12px', background: C.purple + '22', border: `1px solid ${C.purple}55`, borderRadius: 10 }}>
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                      <div style={{ fontSize: 12, color: C.muted }}>{parseInt(m)}月{parseInt(d)}日</div>
+                      <div style={{ fontSize: 12, color: C.accent }}>✓ {e.tasks} タスク</div>
+                      <div style={{ fontSize: 12, color: C.gold }}>＋{e.xp} XP</div>
                     </div>
                   </div>
                 );
-              })}
+              })()}
             </div>
-          </>
-        )}
-      </div>
-
-      {/* History list */}
-      {recent.length === 0 ? (
-        <div style={{ padding: '60px 0', textAlign: 'center', color: C.muted }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>📜</div>
-          <div style={{ fontSize: 16 }}>まだ履歴がありません</div>
-          <div style={{ fontSize: 13, marginTop: 8 }}>クエストを完了すると表示されます</div>
+          )}
         </div>
-      ) : (
-        <>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>
-            完了タスク（最新{recent.length}件）
+      )}
+
+      {/* ---- STATS VIEW ---- */}
+      {histView === 'stats' && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>📊 学習統計</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: showChart ? 16 : 0 }}>
+            <div style={{ background: C.accent + '11', border: `1px solid ${C.accent}33`, borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>⏱ 総学習時間</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.accent }}>{totalSeconds > 0 ? formatStudyTime(totalSeconds) : '—'}</div>
+            </div>
+            <div style={{ background: C.gold + '11', border: `1px solid ${C.gold}33`, borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>🎯 事例クリア</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.gold }}>{caseClears}回</div>
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {recent.map((item, i) => (
-              <div key={i} style={{
-                background: C.card, border: `1px solid ${C.border}`,
-                borderRadius: 12, padding: '12px 16px',
-                display: 'flex', alignItems: 'center', gap: 12,
-              }}>
-                <div style={{ fontSize: 22 }}>{item.icon || '✅'}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{item.name}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>
-                    {item.time}{item.elapsed ? ` · ${formatStudyTime(item.elapsed)}` : ''}
+          {showChart && (
+            <>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>週別XP推移</div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 64 }}>
+                {chartWeeks.map((xp, i) => {
+                  const isCurrent = i === chartWeeks.length - 1;
+                  const label = isCurrent ? '今週' : `${chartWeeks.length - 1 - i}週前`;
+                  return (
+                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <div style={{ fontSize: 9, color: C.muted, minHeight: 12 }}>{xp > 0 ? xp : ''}</div>
+                      <div style={{
+                        width: '100%', height: `${Math.max((xp / maxWkXp) * 40, 3)}px`,
+                        background: isCurrent ? `linear-gradient(180deg, ${C.accent}, ${C.purple})` : C.muted + '55',
+                        borderRadius: 3,
+                      }} />
+                      <div style={{ fontSize: 9, color: isCurrent ? C.accent : C.muted, fontWeight: isCurrent ? 700 : 400 }}>{label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ---- LIST VIEW ---- */}
+      {histView === 'list' && (
+        recent.length === 0 ? (
+          <div style={{ padding: '60px 0', textAlign: 'center', color: C.muted }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>📜</div>
+            <div style={{ fontSize: 16 }}>まだ履歴がありません</div>
+            <div style={{ fontSize: 13, marginTop: 8 }}>クエストを完了すると表示されます</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>完了タスク（最新{recent.length}件）</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {recent.map((item, i) => (
+                <div key={i} style={{
+                  background: C.card, border: `1px solid ${C.border}`,
+                  borderRadius: 12, padding: '12px 16px',
+                  display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                  <div style={{ fontSize: 22 }}>{item.icon || '✅'}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{item.name}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{item.time}{item.elapsed ? ` · ${formatStudyTime(item.elapsed)}` : ''}</div>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, background: C.gold + '22', borderRadius: 8, padding: '3px 8px' }}>
+                    +{item.xp}
                   </div>
                 </div>
-                <div style={{
-                  fontSize: 13, fontWeight: 700, color: C.gold,
-                  background: C.gold + '22', borderRadius: 8, padding: '3px 8px',
-                }}>
-                  +{item.xp}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+              ))}
+            </div>
+          </>
+        )
       )}
     </div>
   );
@@ -2894,6 +3097,9 @@ export default function App() {
 
     const hist = [...(d.history || []), historyItem];
     d.history = hist.length > 40 ? hist.slice(-40) : hist;
+
+    const prevDay = (d.dailyLog || {})[today] || { tasks: 0, xp: 0 };
+    d.dailyLog = { ...(d.dailyLog || {}), [today]: { tasks: prevDay.tasks + 1, xp: prevDay.xp + xp } };
 
     return d;
   }
