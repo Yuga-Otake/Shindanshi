@@ -7,13 +7,16 @@ import React, { useState, useEffect, useRef } from 'react';
 const STORAGE_KEY = 'shindan_quest_v4';
 
 const LEVELS = [
-  { lv: 1, name: '見習い診断士',     xp: 0    },
-  { lv: 2, name: '一次突破者',       xp: 100  },
-  { lv: 3, name: '事例読者',         xp: 250  },
-  { lv: 4, name: '与件マスター',     xp: 500  },
-  { lv: 5, name: '骨子職人',         xp: 900  },
-  { lv: 6, name: '模範解答ハンター', xp: 1500 },
-  { lv: 7, name: '2次試験合格者',    xp: 2500 },
+  { lv: 1,  name: '見習い診断士',     xp: 0     },
+  { lv: 2,  name: '一次突破者',       xp: 150   },
+  { lv: 3,  name: '事例読者',         xp: 400   },
+  { lv: 4,  name: '与件マスター',     xp: 900   },
+  { lv: 5,  name: '骨子職人',         xp: 1800  },
+  { lv: 6,  name: '模範解答ハンター', xp: 3500  },
+  { lv: 7,  name: '事例攻略者',       xp: 6000  },
+  { lv: 8,  name: '本試験挑戦者',     xp: 10000 },
+  { lv: 9,  name: '合格候補生',       xp: 15000 },
+  { lv: 10, name: '2次試験合格者',    xp: 22000 },
 ];
 
 const QUESTS = [
