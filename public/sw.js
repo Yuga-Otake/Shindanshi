@@ -1,4 +1,4 @@
-const CACHE = 'shindan-quest-v1';
+const CACHE = 'shindan-quest-v2';
 
 self.addEventListener('install', event => {
   event.waitUntil(
