@@ -1420,6 +1420,27 @@ function getXpProgress(xp) {
   return Math.min((xp - cur.xp) / (next.xp - cur.xp), 1);
 }
 
+function getDailyMissions(dateStr) {
+  const seed = dateStr.split('-').reduce((acc, n) => acc * 31 + parseInt(n), 7);
+  const ids = QUESTS.map(q => q.id);
+  const picked = [];
+  let s = seed;
+  while (picked.length < 3) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const idx = s % ids.length;
+    if (!picked.includes(ids[idx])) picked.push(ids[idx]);
+  }
+  return picked;
+}
+
+function getMastery(progress, totalSteps) {
+  if (!progress || progress.attempts === 0) return 0;
+  const rate = progress.bestCorrect / totalSteps;
+  if (rate >= 0.8) return 3;
+  if (rate >= 0.5) return 2;
+  return 1;
+}
+
 function formatTimer(seconds) {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
@@ -1457,6 +1478,7 @@ const DEFAULT_DATA = {
   dailyLog: {},
   procedureCase:    null,
   procedureChecked: [],
+  dailyMissionBonus: null,
 };
 
 function loadData() {
@@ -1744,6 +1766,20 @@ function XPParticles({ xp, onDone }) {
 }
 
 // ============================================================
+// StarRating
+// ============================================================
+
+function StarRating({ mastery, size = 14 }) {
+  return (
+    <span style={{ letterSpacing: 1 }}>
+      {[1, 2, 3].map(n => (
+        <span key={n} style={{ color: n <= mastery ? C.gold : '#334155', fontSize: size }}>★</span>
+      ))}
+    </span>
+  );
+}
+
+// ============================================================
 // WeeklyChart
 // ============================================================
 
@@ -1792,6 +1828,8 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
   const todayIndex = getDayIndex();
   const todayDone  = data.completedToday.length;
   const thisWeek   = data.weeklyData.reduce((a, b) => a + b, 0);
+  const today      = todayStr();
+  const dailyMissions = getDailyMissions(today);
 
   return (
     <div style={{ padding: '16px 16px 80px' }}>
@@ -1855,6 +1893,68 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
         ))}
       </div>
 
+      {/* Daily missions */}
+      {(() => {
+        const missionsDoneCount = dailyMissions.filter(id => data.completedToday.includes(id)).length;
+        const allDone = missionsDoneCount === 3;
+        const bonusClaimed = data.dailyMissionBonus === today;
+        return (
+          <div style={{
+            background: allDone ? 'linear-gradient(135deg, #1a1400, #0a1a0a)' : C.card,
+            border: `1px solid ${allDone ? C.gold + '88' : C.border}`,
+            borderRadius: 14, padding: '14px 16px', marginBottom: 14,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: allDone ? C.gold : C.text }}>
+                📋 今日のミッション
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    width: 10, height: 10, borderRadius: '50%',
+                    background: i < missionsDoneCount ? C.gold : '#334155',
+                    transition: 'background 0.3s',
+                  }} />
+                ))}
+                <span style={{ fontSize: 11, color: allDone ? C.gold : C.muted, marginLeft: 4, fontWeight: 700 }}>
+                  {missionsDoneCount}/3
+                </span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {dailyMissions.map(id => {
+                const quest = QUESTS.find(q => q.id === id);
+                const done = data.completedToday.includes(id);
+                return (
+                  <div key={id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    opacity: done ? 0.6 : 1,
+                  }}>
+                    <span style={{ fontSize: 16 }}>{quest.icon}</span>
+                    <span style={{
+                      fontSize: 13, color: done ? C.muted : C.text,
+                      textDecoration: done ? 'line-through' : 'none', flex: 1,
+                    }}>{quest.name}</span>
+                    {done && <span style={{ fontSize: 14, color: C.green }}>✓</span>}
+                    {!done && (
+                      <span style={{ fontSize: 11, color: C.muted }}>+{quest.xp} XP</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {allDone && (
+              <div style={{
+                marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.gold}33`,
+                fontSize: 12, color: C.gold, fontWeight: 700, textAlign: 'center',
+              }}>
+                {bonusClaimed ? '🎉 達成ボーナス +150 XP 受取済み！' : '🎉 3つ完了でボーナス +150 XP！'}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Weekly chart */}
       <WeeklyChart weeklyData={data.weeklyData} todayIndex={todayIndex} />
 
@@ -1877,6 +1977,53 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
           📝 振り返りを書く
         </button>
       </div>
+
+      {/* Mastery summary */}
+      {(() => {
+        const caseGroups = [
+          { caseId: 'case1', label: '事例I', sub: '人事・組織', problems: CASE_STUDY_PROBLEMS.filter(p => p.case === 'case1'), isCaseStudy: true },
+          { caseId: 'case2', label: '事例II', sub: 'マーケ', problems: CASE_STUDY_PROBLEMS.filter(p => p.case === 'case2'), isCaseStudy: true },
+          { caseId: 'case3', label: '事例III', sub: '生産', problems: CASE_STUDY_PROBLEMS.filter(p => p.case === 'case3'), isCaseStudy: true },
+          { caseId: 'case4', label: '事例IV', sub: '財務', problems: FINANCE_PROBLEMS, isCaseStudy: false },
+        ];
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>📊 事例別習熟度</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {caseGroups.map(g => {
+                const store = g.isCaseStudy ? data.caseProgress : data.financeProgress;
+                const masterCount = g.problems.filter(p => getMastery(store?.[p.id], p.steps.length) === 3).length;
+                const total = g.problems.length;
+                const ratio = total > 0 ? masterCount / total : 0;
+                const allMastered = masterCount === total && total > 0;
+                return (
+                  <div key={g.caseId}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: allMastered ? C.gold : C.text }}>{g.label}</span>
+                        <span style={{ fontSize: 11, color: C.muted }}>{g.sub}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <StarRating mastery={Math.round(ratio * 3)} size={12} />
+                        <span style={{ fontSize: 11, color: allMastered ? C.gold : C.muted, fontWeight: allMastered ? 700 : 400 }}>
+                          {allMastered ? '全問マスター！' : `${masterCount}/${total}`}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', width: `${ratio * 100}%`,
+                        background: allMastered ? C.gold : `linear-gradient(90deg, ${C.purple}, ${C.accent})`,
+                        borderRadius: 2, transition: 'width 0.5s ease',
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Quest list */}
       <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>デイリークエスト</div>
@@ -2794,15 +2941,18 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  {prog.completed ? (
-                    <div style={{ fontSize: 22, color: C.green }}>✓</div>
-                  ) : prog.attempts > 0 ? (
-                    <div style={{ fontSize: 12, color: C.muted }}>
-                      {prog.bestCorrect}/{p.steps.length}
-                    </div>
-                  ) : (
-                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${C.border}` }} />
-                  )}
+                  <StarRating mastery={getMastery(prog, p.steps.length)} size={13} />
+                  <div style={{ marginTop: 4 }}>
+                    {prog.completed ? (
+                      <div style={{ fontSize: 20, color: C.green }}>✓</div>
+                    ) : prog.attempts > 0 ? (
+                      <div style={{ fontSize: 12, color: C.muted }}>
+                        {prog.bestCorrect}/{p.steps.length}
+                      </div>
+                    ) : (
+                      <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${C.border}`, margin: '0 auto' }} />
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -3106,13 +3256,32 @@ export default function App() {
 
   function handleCompleteQuest(quest, elapsed) {
     if (data.completedToday.includes(quest.id)) return;
+    const today = todayStr();
     const prevLevel = getLevel(data.xp);
     const hi = buildHistoryItem(quest.icon, quest.name, quest.xp, elapsed);
     let d = applyXpGain(data, quest.xp, hi);
     d.completedToday = [...(d.completedToday || []), quest.id];
+
+    const missions = getDailyMissions(today);
+    const allMissionsDone = missions.every(id => d.completedToday.includes(id));
+    let bonusXp = 0;
+    if (allMissionsDone && d.dailyMissionBonus !== today) {
+      d.dailyMissionBonus = today;
+      bonusXp = 150;
+      d.xp = (d.xp || 0) + bonusXp;
+    }
+
     commit(d);
     const newLevel = getLevel(d.xp);
     if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
+
+    if (bonusXp > 0) {
+      setTimeout(() => {
+        setReward({ icon: '🎯', title: 'デイリーミッション達成！', xp: bonusXp, message: '3つのミッションをクリア！' });
+        setParticles(bonusXp);
+      }, 1600);
+    }
+
     setReward({ icon: quest.icon, title: quest.name, xp: quest.xp, message: 'クエスト完了！' });
     setParticles(quest.xp);
   }
