@@ -1444,6 +1444,18 @@ function getMastery(progress, totalSteps) {
   return 1;
 }
 
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return localDateStr(d);
+}
+
+function getDueReviews(reviewSchedule, today) {
+  return Object.entries(reviewSchedule || {})
+    .filter(([, v]) => v.nextDate <= today)
+    .map(([id]) => id);
+}
+
 function formatTimer(seconds) {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
@@ -1482,6 +1494,7 @@ const DEFAULT_DATA = {
   procedureCase:    null,
   procedureChecked: [],
   dailyMissionBonus: null,
+  reviewSchedule: {},
 };
 
 function loadData() {
@@ -1954,6 +1967,51 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
                 {bonusClaimed ? '🎉 達成ボーナス +150 XP 受取済み！' : '🎉 3つ完了でボーナス +150 XP！'}
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {/* Due reviews */}
+      {(() => {
+        const dueIds = getDueReviews(data.reviewSchedule, today);
+        if (dueIds.length === 0) return null;
+        const allProblems = [...CASE_STUDY_PROBLEMS, ...FINANCE_PROBLEMS];
+        const caseLabels = { case1: '事例I', case2: '事例II', case3: '事例III', case4: '事例IV' };
+        return (
+          <div style={{
+            background: '#1a0e08', border: `1px solid ${C.orange}66`,
+            borderRadius: 14, padding: '14px 16px', marginBottom: 14,
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.orange, marginBottom: 10 }}>
+              🔔 今日の復習 <span style={{ fontSize: 11, fontWeight: 400, color: C.muted }}>({dueIds.length}件)</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {dueIds.slice(0, 5).map(id => {
+                const p = allProblems.find(x => x.id === id);
+                if (!p) return null;
+                const caseId = p.case || 'case4';
+                return (
+                  <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>{p.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{caseLabels[caseId]}</div>
+                    </div>
+                    <button
+                      onClick={() => onNavigate('finance', id)}
+                      style={{
+                        background: `${C.orange}22`, border: `1px solid ${C.orange}`,
+                        borderRadius: 8, padding: '4px 10px',
+                        fontSize: 12, color: C.orange, fontWeight: 700, cursor: 'pointer',
+                      }}
+                    >▶ 解く</button>
+                  </div>
+                );
+              })}
+              {dueIds.length > 5 && (
+                <div style={{ fontSize: 11, color: C.muted, textAlign: 'center' }}>他 {dueIds.length - 5} 件</div>
+              )}
+            </div>
           </div>
         );
       })()}
@@ -2746,8 +2804,9 @@ function HistoryTab({ data }) {
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, pendingProblem, onClearPending }) {
   const [view, setView]                   = useState('list');
+  const [tabMode, setTabMode]             = useState('study');
   const [selectedCase, setSelectedCase]   = useState('case4');
   const [filterType, setFilterType]           = useState('all');
   const [filterDifficulty, setFilterDifficulty] = useState('all');
@@ -2757,6 +2816,16 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
   const [showExplanation, setShowExplanation] = useState(false);
   const [stepResults, setStepResults]     = useState([]);
   const [solverDone, setSolverDone]       = useState(false);
+  // 模擬試験
+  const [examPhase, setExamPhase]         = useState('setup');
+  const [examConfig, setExamConfig]       = useState({ cases: ['case1','case2','case3','case4'], perCase: 2, timeLimit: 80 });
+  const [examProblems, setExamProblems]   = useState([]);
+  const [examIdx, setExamIdx]             = useState(0);
+  const [examAnswers, setExamAnswers]     = useState([]);
+  const [examTimeLeft, setExamTimeLeft]   = useState(null);
+  const [examChoice, setExamChoice]       = useState(null);
+  const [examShowExp, setExamShowExp]     = useState(false);
+  const examTimerRef = useRef(null);
 
   function resetSolver() {
     setCurrentStep(0);
@@ -2765,6 +2834,20 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
     setStepResults([]);
     setSolverDone(false);
   }
+
+  // pendingProblem から自動で問題を開く
+  useEffect(() => {
+    if (!pendingProblem) return;
+    const allProblems = [...CASE_STUDY_PROBLEMS, ...FINANCE_PROBLEMS];
+    const p = allProblems.find(x => x.id === pendingProblem);
+    if (p) {
+      setTabMode('study');
+      if (p.case && p.case !== 'case4') setSelectedCase(p.case);
+      else setSelectedCase('case4');
+      startProblem(p);
+    }
+    onClearPending();
+  }, [pendingProblem]); // eslint-disable-line
 
   function shuffleProblem(problem) {
     const steps = problem.steps.map(step => {
@@ -2814,6 +2897,79 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
     return store?.[problemId] || { attempts: 0, bestCorrect: 0, completed: false };
   }
 
+  // 模擬試験ヘルパー
+  function shuffleArray(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function buildExamProblems(config) {
+    let problems = [];
+    config.cases.forEach(caseId => {
+      const pool = caseId === 'case4'
+        ? FINANCE_PROBLEMS
+        : CASE_STUDY_PROBLEMS.filter(p => p.case === caseId);
+      const n = config.perCase === 'all' ? pool.length : Math.min(config.perCase, pool.length);
+      shuffleArray(pool).slice(0, n).forEach(p => problems.push(shuffleProblem(p)));
+    });
+    return problems;
+  }
+
+  function startExam() {
+    const problems = buildExamProblems(examConfig);
+    setExamProblems(problems);
+    setExamIdx(0);
+    setExamAnswers([]);
+    setExamChoice(null);
+    setExamShowExp(false);
+    setExamTimeLeft(examConfig.timeLimit ? examConfig.timeLimit * 60 : null);
+    setExamPhase('solving');
+  }
+
+  function finishExam(answers) {
+    if (examTimerRef.current) clearInterval(examTimerRef.current);
+    setExamAnswers(answers);
+    setExamPhase('result');
+    onExamComplete(answers.filter(Boolean).length);
+  }
+
+  function handleExamChoice(idx) {
+    if (examChoice !== null) return;
+    setExamChoice(idx);
+    setExamShowExp(true);
+  }
+
+  function handleExamNext() {
+    const step = examProblems[examIdx]?.steps[0]; // single-step for exam
+    const isCorrect = examChoice === examProblems[examIdx].steps[0].correct;
+    const newAnswers = [...examAnswers, isCorrect];
+    if (examIdx + 1 >= examProblems.length) {
+      finishExam(newAnswers);
+    } else {
+      setExamAnswers(newAnswers);
+      setExamIdx(i => i + 1);
+      setExamChoice(null);
+      setExamShowExp(false);
+    }
+  }
+
+  // タイマー
+  useEffect(() => {
+    if (examPhase !== 'solving' || examTimeLeft === null) return;
+    if (examTimeLeft <= 0) {
+      // タイムアップ: 残り問題を不正解として終了
+      const remaining = examProblems.length - examAnswers.length;
+      finishExam([...examAnswers, ...Array(remaining).fill(false)]);
+      return;
+    }
+    examTimerRef.current = setInterval(() => setExamTimeLeft(t => t - 1), 1000);
+    return () => clearInterval(examTimerRef.current);
+  }, [examPhase, examTimeLeft]); // eslint-disable-line
+
   const filterTypes = [
     { id: 'all', label: 'すべて' },
     { id: 'cvp', label: 'CVP分析' },
@@ -2845,6 +3001,310 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
   if (view === 'list') {
     return (
       <div style={{ padding: '16px 16px 80px' }}>
+        {/* Mode toggle */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {[
+            { id: 'study', label: '✍️ 演習' },
+            { id: 'analysis', label: '📊 分析' },
+            { id: 'exam', label: '🎯 模擬試験' },
+          ].map(m => (
+            <button
+              key={m.id}
+              onClick={() => setTabMode(m.id)}
+              style={{
+                padding: '8px 16px', borderRadius: 20, border: 'none',
+                background: tabMode === m.id ? C.accent : C.card,
+                color: tabMode === m.id ? '#000' : C.muted,
+                fontWeight: tabMode === m.id ? 700 : 400,
+                cursor: 'pointer', fontSize: 13,
+              }}
+            >{m.label}</button>
+          ))}
+        </div>
+
+        {/* ===== 弱点分析 ===== */}
+        {tabMode === 'analysis' && (() => {
+          const analysisCase = selectedCase;
+          const isCsAnalysis = analysisCase !== 'case4';
+          const pool = isCsAnalysis
+            ? CASE_STUDY_PROBLEMS.filter(p => p.case === analysisCase)
+            : FINANCE_PROBLEMS;
+          const typeLabels = isCsAnalysis ? CASE_TYPE_LABELS : FINANCE_TYPE_LABELS;
+          const typeColors = isCsAnalysis ? CASE_TYPE_COLORS : FINANCE_TYPE_COLORS;
+          const store = isCsAnalysis ? data.caseProgress : data.financeProgress;
+
+          // 型ごとに集計
+          const byType = {};
+          pool.forEach(p => {
+            if (!byType[p.type]) byType[p.type] = { total: 0, sumRate: 0, attempted: 0 };
+            byType[p.type].total++;
+            const prog = store?.[p.id];
+            if (prog && prog.attempts > 0) {
+              byType[p.type].sumRate += prog.bestCorrect / p.steps.length;
+              byType[p.type].attempted++;
+            }
+          });
+
+          const rows = Object.entries(byType).map(([type, v]) => ({
+            type,
+            label: typeLabels[type] || type,
+            color: typeColors[type] || C.muted,
+            attempted: v.attempted,
+            total: v.total,
+            rate: v.attempted > 0 ? v.sumRate / v.total : null,
+          })).sort((a, b) => {
+            if (a.rate === null && b.rate === null) return 0;
+            if (a.rate === null) return -1;
+            if (b.rate === null) return 1;
+            return a.rate - b.rate;
+          });
+
+          return (
+            <div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+                {caseSelectors.map(cs => (
+                  <button
+                    key={cs.id}
+                    onClick={() => setSelectedCase(cs.id)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 20, border: 'none',
+                      background: selectedCase === cs.id ? C.purple : C.card,
+                      color: selectedCase === cs.id ? '#fff' : C.muted,
+                      fontWeight: selectedCase === cs.id ? 700 : 400,
+                      cursor: 'pointer', fontSize: 12,
+                    }}
+                  >{cs.label} <span style={{ fontSize: 10, opacity: 0.75 }}>{cs.sub}</span></button>
+                ))}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>苦手な分野が上に表示されます</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {rows.map(r => {
+                  const pct = r.rate !== null ? Math.round(r.rate * 100) : null;
+                  const barColor = pct === null ? '#334155' : pct < 50 ? C.red : pct < 80 ? '#f59e0b' : C.green;
+                  return (
+                    <div key={r.type} style={{ background: C.card, borderRadius: 12, padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: r.color }}>{r.label}</span>
+                        <span style={{ fontSize: 12, color: pct === null ? C.muted : barColor, fontWeight: 700 }}>
+                          {pct === null ? '未挑戦' : `${pct}%`}
+                        </span>
+                      </div>
+                      <div style={{ height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%', width: `${pct ?? 0}%`,
+                          background: barColor, borderRadius: 3, transition: 'width 0.5s ease',
+                        }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                        {r.attempted}/{r.total}問 挑戦済み
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ===== 模擬試験 ===== */}
+        {tabMode === 'exam' && (() => {
+          const caseLabels2 = { case1: '事例I 人事・組織', case2: '事例II マーケ', case3: '事例III 生産', case4: '事例IV 財務' };
+
+          // ---- 結果画面 ----
+          if (examPhase === 'result') {
+            const correct = examAnswers.filter(Boolean).length;
+            const total = examAnswers.length;
+            const byCase = {};
+            examProblems.forEach((p, i) => {
+              const cid = p.case || 'case4';
+              if (!byCase[cid]) byCase[cid] = { ok: 0, total: 0 };
+              byCase[cid].total++;
+              if (examAnswers[i]) byCase[cid].ok++;
+            });
+            return (
+              <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>{correct === total ? '🎉' : '📝'}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: correct === total ? C.gold : C.text, marginBottom: 8 }}>
+                  {correct === total ? '満点！' : '試験終了'}
+                </div>
+                <div style={{ fontSize: 36, fontWeight: 700, color: C.accent, marginBottom: 4 }}>
+                  {correct} / {total}
+                </div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>＋{correct * 10} XP 獲得</div>
+                <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+                  {examAnswers.map((ok, i) => (
+                    <div key={i} style={{
+                      width: 30, height: 30, borderRadius: '50%',
+                      background: ok ? C.green : C.red,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 14, color: '#fff', fontWeight: 700,
+                    }}>{ok ? '○' : '×'}</div>
+                  ))}
+                </div>
+                <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 20, textAlign: 'left' }}>
+                  {Object.entries(byCase).map(([cid, v]) => (
+                    <div key={cid} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, color: C.text }}>{caseLabels2[cid]}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: v.ok === v.total ? C.gold : C.accent }}>
+                        {v.ok}/{v.total}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                  <button onClick={() => setExamPhase('setup')} style={{
+                    padding: '12px 20px', borderRadius: 10, border: `1px solid ${C.accent}`,
+                    background: 'transparent', color: C.accent, fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                  }}>もう一度</button>
+                  <button onClick={() => setTabMode('study')} style={{
+                    padding: '12px 20px', borderRadius: 10, border: 'none',
+                    background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                  }}>終了</button>
+                </div>
+              </div>
+            );
+          }
+
+          // ---- 試験中 ----
+          if (examPhase === 'solving' && examProblems.length > 0) {
+            const ep = examProblems[examIdx];
+            const estep = ep.steps[0];
+            const mins = examTimeLeft !== null ? Math.floor(examTimeLeft / 60) : null;
+            const secs = examTimeLeft !== null ? examTimeLeft % 60 : null;
+            const timeWarn = examTimeLeft !== null && examTimeLeft <= 600;
+            return (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, color: C.muted }}>問題 {examIdx + 1}/{examProblems.length}</div>
+                  {examTimeLeft !== null && (
+                    <div style={{ fontSize: 15, fontWeight: 700, color: timeWarn ? C.red : C.gold }}>
+                      ⏱ {String(mins).padStart(2,'0')}:{String(secs).padStart(2,'0')}
+                    </div>
+                  )}
+                  <button onClick={() => { if (examTimerRef.current) clearInterval(examTimerRef.current); setExamPhase('setup'); }}
+                    style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12 }}>退出</button>
+                </div>
+                <div style={{ background: C.card, borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{ep.title}</div>
+                  <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>{estep.question}</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                  {estep.choices.map((choice, idx) => {
+                    let bg = C.card, border = C.border, color = C.text;
+                    if (examChoice !== null) {
+                      if (idx === estep.correct) { bg = '#0a2010'; border = C.green; color = C.green; }
+                      else if (idx === examChoice && examChoice !== estep.correct) { bg = '#200a0a'; border = C.red; color = C.red; }
+                    } else if (examChoice === idx) {
+                      bg = `${C.accent}22`; border = C.accent; color = C.accent;
+                    }
+                    return (
+                      <button key={idx} onClick={() => handleExamChoice(idx)} style={{
+                        background: bg, border: `1px solid ${border}`, borderRadius: 10,
+                        padding: '12px 14px', color, textAlign: 'left', cursor: examChoice !== null ? 'default' : 'pointer',
+                        fontSize: 13, lineHeight: 1.5,
+                      }}>
+                        <span style={{ fontWeight: 700, marginRight: 8 }}>
+                          {['A','B','C','D'][idx]}
+                        </span>{choice}
+                      </button>
+                    );
+                  })}
+                </div>
+                {examShowExp && (
+                  <div style={{ background: '#0d1a10', border: `1px solid ${C.green}44`, borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 13, color: '#a7f3d0', lineHeight: 1.6 }}>
+                    {estep.explanation}
+                  </div>
+                )}
+                {examChoice !== null && (
+                  <button onClick={handleExamNext} style={{
+                    width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+                    background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 15,
+                  }}>
+                    {examIdx + 1 < examProblems.length ? '次の問題 →' : '結果を見る'}
+                  </button>
+                )}
+              </div>
+            );
+          }
+
+          // ---- セットアップ画面 ----
+          return (
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>模擬試験モード</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>問題をランダムに出題します</div>
+
+              <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>出題する事例</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {[
+                    { id: 'case1', label: '事例I' }, { id: 'case2', label: '事例II' },
+                    { id: 'case3', label: '事例III' }, { id: 'case4', label: '事例IV' },
+                  ].map(c => {
+                    const on = examConfig.cases.includes(c.id);
+                    return (
+                      <button key={c.id} onClick={() => setExamConfig(cfg => ({
+                        ...cfg,
+                        cases: on
+                          ? cfg.cases.filter(x => x !== c.id)
+                          : [...cfg.cases, c.id],
+                      }))} style={{
+                        padding: '8px 14px', borderRadius: 20, border: `1px solid ${on ? C.accent : C.border}`,
+                        background: on ? `${C.accent}22` : C.bg,
+                        color: on ? C.accent : C.muted, fontWeight: on ? 700 : 400,
+                        cursor: 'pointer', fontSize: 13,
+                      }}>{on ? '✓ ' : ''}{c.label}</button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>各事例から何問出題するか</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[{ v: 2, label: '2問' }, { v: 3, label: '3問' }, { v: 'all', label: '全問' }].map(opt => (
+                    <button key={opt.v} onClick={() => setExamConfig(cfg => ({ ...cfg, perCase: opt.v }))} style={{
+                      flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${examConfig.perCase === opt.v ? C.accent : C.border}`,
+                      background: examConfig.perCase === opt.v ? `${C.accent}22` : C.bg,
+                      color: examConfig.perCase === opt.v ? C.accent : C.muted,
+                      fontWeight: examConfig.perCase === opt.v ? 700 : 400,
+                      cursor: 'pointer', fontSize: 13,
+                    }}>{opt.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>制限時間</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[{ v: null, label: 'なし' }, { v: 40, label: '40分' }, { v: 80, label: '80分' }].map(opt => (
+                    <button key={String(opt.v)} onClick={() => setExamConfig(cfg => ({ ...cfg, timeLimit: opt.v }))} style={{
+                      flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${examConfig.timeLimit === opt.v ? C.gold : C.border}`,
+                      background: examConfig.timeLimit === opt.v ? `${C.gold}22` : C.bg,
+                      color: examConfig.timeLimit === opt.v ? C.gold : C.muted,
+                      fontWeight: examConfig.timeLimit === opt.v ? 700 : 400,
+                      cursor: 'pointer', fontSize: 13,
+                    }}>{opt.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={startExam}
+                disabled={examConfig.cases.length === 0}
+                style={{
+                  width: '100%', padding: '16px', borderRadius: 12, border: 'none',
+                  background: examConfig.cases.length === 0 ? C.card : `linear-gradient(135deg, ${C.purple}, ${C.accent})`,
+                  color: examConfig.cases.length === 0 ? C.muted : '#000',
+                  fontWeight: 700, cursor: examConfig.cases.length === 0 ? 'default' : 'pointer',
+                  fontSize: 16,
+                }}
+              >🎯 試験開始</button>
+            </div>
+          );
+        })()}
+
+        {/* ===== 演習（既存） ===== */}
+        {tabMode === 'study' && <>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>
           {caseTitles[selectedCase]}
         </div>
@@ -2937,6 +3397,12 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
                         background: C.gold + '22', borderRadius: 4, padding: '2px 6px',
                       }}>⭐⭐ 応用</span>
                     )}
+                    {data.reviewSchedule?.[p.id]?.nextDate <= todayStr() && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, color: C.orange,
+                        background: C.orange + '22', borderRadius: 4, padding: '2px 6px',
+                      }}>🔔 要復習</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{p.title}</div>
                   <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
@@ -2961,6 +3427,7 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
             );
           })}
         </div>
+        </>}
       </div>
     );
   }
@@ -3201,6 +3668,7 @@ export default function App() {
   const [reward,   setReward]   = useState(null);
   const [particles, setParticles] = useState(null);
   const [levelUp,  setLevelUp]  = useState(null);
+  const [pendingProblem, setPendingProblem] = useState(null);
 
   function commit(newData) {
     setData(newData);
@@ -3302,12 +3770,26 @@ export default function App() {
     navigator.vibrate?.([100, 50, 100]);
   }
 
+  function handleExamComplete(correctCount) {
+    const xp = correctCount * 10;
+    if (xp <= 0) return;
+    const prevLevel = getLevel(data.xp);
+    const hi = buildHistoryItem('🎯', `模擬試験 ${correctCount}問正解`, xp);
+    const d = applyXpGain(data, xp, hi);
+    commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
+    setReward({ icon: '🎯', title: '模擬試験完了！', xp, message: `${correctCount}問正解` });
+    setParticles(xp);
+  }
+
   function handleFinanceComplete(problemId, correctCount, totalCount) {
     const problem = FINANCE_PROBLEMS.find(p => p.id === problemId);
     const prev = data.financeProgress?.[problemId] || { attempts: 0, bestCorrect: 0, completed: false };
     const newBest = Math.max(prev.bestCorrect, correctCount);
     const nowCompleted = newBest === totalCount;
     const alreadyCompleted = prev.completed;
+    const today = todayStr();
 
     let d = {
       ...data,
@@ -3316,6 +3798,18 @@ export default function App() {
         [problemId]: { attempts: prev.attempts + 1, bestCorrect: newBest, completed: nowCompleted },
       },
     };
+
+    // 間隔反復スケジュール更新
+    const rate = correctCount / totalCount;
+    const prevSched = d.reviewSchedule?.[problemId] || { interval: 1, wrongStreak: 0 };
+    if (rate >= 0.8) {
+      const ni = Math.min((prevSched.interval || 1) * 2, 30);
+      d.reviewSchedule = { ...(d.reviewSchedule || {}), [problemId]: { nextDate: addDays(today, ni), interval: ni, wrongStreak: 0 } };
+    } else {
+      const ws = (prevSched.wrongStreak || 0) + 1;
+      const ni = ws <= 1 ? 1 : ws === 2 ? 3 : 7;
+      d.reviewSchedule = { ...(d.reviewSchedule || {}), [problemId]: { nextDate: addDays(today, ni), interval: ni, wrongStreak: ws } };
+    }
 
     let xpAwarded = 0;
     if (nowCompleted && !alreadyCompleted) {
@@ -3344,6 +3838,7 @@ export default function App() {
     const newBest = Math.max(prev.bestCorrect, correctCount);
     const nowCompleted = newBest === totalCount;
     const alreadyCompleted = prev.completed;
+    const today = todayStr();
 
     let d = {
       ...data,
@@ -3352,6 +3847,18 @@ export default function App() {
         [problemId]: { attempts: prev.attempts + 1, bestCorrect: newBest, completed: nowCompleted },
       },
     };
+
+    // 間隔反復スケジュール更新
+    const rate = correctCount / totalCount;
+    const prevSched = d.reviewSchedule?.[problemId] || { interval: 1, wrongStreak: 0 };
+    if (rate >= 0.8) {
+      const ni = Math.min((prevSched.interval || 1) * 2, 30);
+      d.reviewSchedule = { ...(d.reviewSchedule || {}), [problemId]: { nextDate: addDays(today, ni), interval: ni, wrongStreak: 0 } };
+    } else {
+      const ws = (prevSched.wrongStreak || 0) + 1;
+      const ni = ws <= 1 ? 1 : ws === 2 ? 3 : 7;
+      d.reviewSchedule = { ...(d.reviewSchedule || {}), [problemId]: { nextDate: addDays(today, ni), interval: ni, wrongStreak: ws } };
+    }
 
     let xpAwarded = 0;
     if (nowCompleted && !alreadyCompleted) {
@@ -3408,7 +3915,14 @@ export default function App() {
       </div>
 
       {tab === 'quest' && (
-        <QuestTab data={data} onCompleteQuest={handleCompleteQuest} onNavigate={setTab} />
+        <QuestTab
+          data={data}
+          onCompleteQuest={handleCompleteQuest}
+          onNavigate={(tabId, problemId) => {
+            setTab(tabId);
+            if (problemId) setPendingProblem(problemId);
+          }}
+        />
       )}
       {tab === 'procedure' && (
         <ProcedureTab
@@ -3425,7 +3939,14 @@ export default function App() {
         <HistoryTab data={data} />
       )}
       {tab === 'finance' && (
-        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} onCaseStudyComplete={handleCaseStudyComplete} />
+        <FinanceTab
+          data={data}
+          onFinanceComplete={handleFinanceComplete}
+          onCaseStudyComplete={handleCaseStudyComplete}
+          onExamComplete={handleExamComplete}
+          pendingProblem={pendingProblem}
+          onClearPending={() => setPendingProblem(null)}
+        />
       )}
 
       <BottomNav active={tab} onChange={setTab} remainingCount={remainingQuests} />
