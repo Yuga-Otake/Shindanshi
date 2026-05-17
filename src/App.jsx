@@ -3401,6 +3401,68 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
     onClearPending();
   }, [pendingProblem]); // eslint-disable-line
 
+  async function gradeEssay() {
+    if (!essayAnswer.trim() || !essayProblem) return;
+    setEssayLoading(true);
+    setEssayFeedback(null);
+    const apiKey = data.geminiApiKey || '';
+    const prompt = `あなたは中小企業診断士2次試験の採点者です。以下の問題と採点キーワードをもとに、受験者の答案を採点してください。
+
+【問題】
+${essayProblem.question}
+
+【採点キーワード（これらが含まれているか確認）】
+${essayProblem.keywords.join('、')}
+
+【受験者の答案】
+${essayAnswer}
+
+必ず以下のJSON形式のみで回答してください。説明文やコードブロックは不要です:
+{"score":7,"good":"良かった点のテキスト","improve":"改善点のテキスト","hint":"解答のポイントのテキスト"}
+scoreは0〜10の整数。`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+          signal: controller.signal,
+        }
+      );
+      clearTimeout(timer);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        const errBody = (() => { try { return JSON.parse(errText); } catch { return null; } })();
+        const msg = errBody?.error?.message || `HTTP ${res.status}`;
+        setEssayFeedback({ score: 0, good: '', improve: '', hint: `APIエラー: ${msg}` });
+        setEssayLoading(false);
+        return;
+      }
+      const json = await res.json();
+      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const match = text.match(/\{[\s\S]*?\}/);
+      if (match) {
+        try {
+          const fb = JSON.parse(match[0]);
+          setEssayFeedback(fb);
+          onEssayComplete(fb.score || 0);
+        } catch {
+          setEssayFeedback({ score: 0, good: '', improve: '', hint: `JSON解析エラー。Geminiの返答: ${text.slice(0, 200)}` });
+        }
+      } else {
+        setEssayFeedback({ score: 0, good: '', improve: '', hint: `レスポンスを解析できませんでした。Geminiの返答: ${text.slice(0, 200)}` });
+      }
+    } catch (e) {
+      clearTimeout(timer);
+      const msg = e.name === 'AbortError' ? 'タイムアウト（30秒）しました。再度お試しください。' : `ネットワークエラー: ${e.message}`;
+      setEssayFeedback({ score: 0, good: '', improve: '', hint: msg });
+    }
+    setEssayLoading(false);
+  }
+
   function shuffleProblem(problem) {
     const steps = problem.steps.map(step => {
       const items = step.choices.map((c, i) => ({ c, isCorrect: i === step.correct }));
@@ -4250,49 +4312,6 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
         {/* ===== 論述（Gemini採点） ===== */}
         {tabMode === 'essay' && (() => {
           const apiKey = data.geminiApiKey || '';
-
-          async function gradeEssay() {
-            if (!essayAnswer.trim()) return;
-            setEssayLoading(true);
-            setEssayFeedback(null);
-            const prompt = `あなたは中小企業診断士2次試験の採点者です。以下の問題と採点キーワードをもとに、受験者の答案を採点してください。
-
-【問題】
-${essayProblem.question}
-
-【採点キーワード（これらが含まれているか確認）】
-${essayProblem.keywords.join('、')}
-
-【受験者の答案】
-${essayAnswer}
-
-以下のJSON形式のみで回答してください（他のテキストは不要）:
-{"score":X,"good":"良かった点","improve":"改善すべき点","hint":"模範解答のポイント"}
-scoreは0〜10の整数。`;
-            try {
-              const res = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-                }
-              );
-              const json = await res.json();
-              const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-              const match = text.match(/\{[\s\S]*\}/);
-              if (match) {
-                const fb = JSON.parse(match[0]);
-                setEssayFeedback(fb);
-                onEssayComplete(fb.score || 0);
-              } else {
-                setEssayFeedback({ score: 0, good: '', improve: '', hint: 'レスポンスの解析に失敗しました。再度お試しください。' });
-              }
-            } catch (e) {
-              setEssayFeedback({ score: 0, good: '', improve: '', hint: `エラー: ${e.message}` });
-            }
-            setEssayLoading(false);
-          }
 
           // API key 未設定画面
           if (!apiKey) {
