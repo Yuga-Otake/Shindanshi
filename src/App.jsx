@@ -1150,7 +1150,7 @@ const FINANCE_PROBLEMS = [
         choices: [
           'A. 810万円　（900×0.7 ＋ 600×0.3 ＝ 630＋180）',
           'B. 630万円　（900×0.7 のみ、タックスシールド無視）',
-          'C. 870万円　（900×0.97 の誤計算）',
+          'C. 870万円　（900×0.97）',
           'D. 900万円　（税金を無視）',
         ],
         correct: 0,
@@ -1191,7 +1191,7 @@ const FINANCE_PROBLEMS = [
           'A. 3.5%　（5% × (1 − 0.30)）',
           'B. 5.0%　（税効果を無視）',
           'C. 1.5%　（5% × 0.30 のみ）',
-          'D. 3.0%　（5% − 2% の誤計算）',
+          'D. 3.0%　（5% × 0.60）',
         ],
         correct: 0,
         explanation: '税引後負債コスト ＝ 利率 × (1 − 税率) ＝ 5% × 0.70 ＝ 3.5%。利息は損金算入できるため実質コストは低くなる。',
@@ -1343,7 +1343,7 @@ const FINANCE_PROBLEMS = [
         choices: [
           'A. 500万円　（投下資本5,000万 × WACC 10%）',
           'B. 600万円　（NOPATと同額）',
-          'C. 50万円　（WACC 10% × 500万の誤計算）',
+          'C. 50万円　（WACC 1% × 5,000万）',
           'D. 5,000万円　（投下資本そのまま）',
         ],
         correct: 0,
@@ -1906,6 +1906,107 @@ function formatDateTime() {
 }
 
 // ============================================================
+// Essay problems (Gemini grading)
+// ============================================================
+
+const ESSAY_PROBLEMS = [
+  // 事例I
+  {
+    id: 'essay_c1_01', case: 'case1', icon: '🏢',
+    title: '事業部制組織の特徴',
+    question: '事業部制組織のメリットとデメリットをそれぞれ2つずつ述べよ。（目安 100字）',
+    keywords: ['損益責任の明確化', '意思決定の速さ', '分権化', '資源の重複', '部分最適', 'サイロ化', '全社最適の欠如'],
+  },
+  {
+    id: 'essay_c1_02', case: 'case1', icon: '🎯',
+    title: '権限委譲の進め方',
+    question: '中小企業が権限委譲を進める際の効果と留意点をそれぞれ述べよ。（目安 100字）',
+    keywords: ['意思決定の迅速化', 'モチベーション向上', '権限と責任の一致', '報告ルートの維持', '人材育成'],
+  },
+  {
+    id: 'essay_c1_03', case: 'case1', icon: '💡',
+    title: '従業員モチベーション施策',
+    question: 'ハーツバーグの2要因理論を踏まえ、中小企業が従業員のモチベーションを高めるための施策を2つ提案せよ。（目安 100字）',
+    keywords: ['動機づけ要因', '達成感', '承認', '権限委譲', '成長機会', 'OJT', 'Off-JT', '目標管理（MBO）'],
+  },
+  {
+    id: 'essay_c1_04', case: 'case1', icon: '👥',
+    title: '同族企業の課題と対策',
+    question: '同族企業（ファミリービジネス）が抱える組織上の課題を2つ挙げ、それぞれの対策を述べよ。（目安 120字）',
+    keywords: ['縁故人事', '外部人材の登用不足', '権限委譲', 'ガバナンス', '後継者育成', '外部役員', '透明性', '評価制度'],
+  },
+  // 事例II
+  {
+    id: 'essay_c2_01', case: 'case2', icon: '🎯',
+    title: 'STP分析の概要',
+    question: 'STP分析のセグメンテーション・ターゲティング・ポジショニングそれぞれの目的を簡潔に説明せよ。（目安 100字）',
+    keywords: ['市場細分化', '標的市場の選定', '差別化', '独自ポジション', '知覚マップ', '資源集中'],
+  },
+  {
+    id: 'essay_c2_02', case: 'case2', icon: '💰',
+    title: '顧客リテンション施策',
+    question: '中小企業が既存顧客のリテンション（継続率）を高めるための施策を2つ提案し、その理由を述べよ。（目安 120字）',
+    keywords: ['LTV', '顧客生涯価値', 'ポイントプログラム', '定期購入', 'CRM', 'ロイヤルティ', '顧客体験', 'アフターフォロー'],
+  },
+  {
+    id: 'essay_c2_03', case: 'case2', icon: '🗾',
+    title: '地域ブランド戦略',
+    question: '地域密着型の中小企業が地域ブランドを活かして競合との差別化を図るための施策を述べよ。（目安 100字）',
+    keywords: ['地域資源', '差別化', 'ストーリー性', '地産地消', '6次産業化', 'GI（地理的表示）', 'SNS発信', '地域連携'],
+  },
+  {
+    id: 'essay_c2_04', case: 'case2', icon: '🛒',
+    title: 'デジタルマーケティング活用',
+    question: '小規模事業者がSNSを活用してAISASモデルに沿った購買促進を行うための施策を述べよ。（目安 100字）',
+    keywords: ['Attention', 'Interest', 'Search', 'Action', 'Share', 'SEO', 'UGC', '口コミ', 'ハッシュタグ', 'インフルエンサー'],
+  },
+  // 事例III
+  {
+    id: 'essay_c3_01', case: 'case3', icon: '⚙️',
+    title: 'QCDの改善',
+    question: 'QCD（品質・コスト・納期）のうちコストと納期を同時に改善するための生産管理上の施策を述べよ。（目安 100字）',
+    keywords: ['段取り時間短縮', 'ムダの排除', 'JIT', '小ロット化', '工程改善', '平準化', '多能工化', '内段取りの外段取り化'],
+  },
+  {
+    id: 'essay_c3_02', case: 'case3', icon: '👷',
+    title: '多能工化のメリットと課題',
+    question: '製造業における多能工化推進の効果と、実施上の課題をそれぞれ1つずつ述べよ。（目安 100字）',
+    keywords: ['ライン停止リスク低減', '人員の柔軟配置', 'OJT', 'スキルマップ', 'ローテーション', '習得コスト', '品質低下リスク'],
+  },
+  {
+    id: 'essay_c3_03', case: 'case3', icon: '🏭',
+    title: 'ジャストインタイムとかんばん',
+    question: 'ジャストインタイム（JIT）生産方式における「かんばん」の役割を説明せよ。（目安 80字）',
+    keywords: ['後補充方式', '引っ張り型', '必要な時に必要な量', '在庫削減', '工程間の情報伝達', 'プル型'],
+  },
+  {
+    id: 'essay_c3_04', case: 'case3', icon: '📋',
+    title: 'TPMの目的',
+    question: 'TPM（全員参加の生産保全）の目的と、中小企業で導入する際のポイントを述べよ。（目安 100字）',
+    keywords: ['設備総合効率（OEE）', '8大ロス', '自主保全', '全員参加', '計画保全', '予防保全', '改善チーム'],
+  },
+  // 事例IV
+  {
+    id: 'essay_c4_01', case: 'case4', icon: '📈',
+    title: 'CVP分析の活用',
+    question: 'CVP分析（損益分岐点分析）の概要と、経営判断への活用方法を説明せよ。（目安 100字）',
+    keywords: ['固定費', '変動費', '限界利益', '損益分岐点売上高', '安全余裕率', '目標利益', '価格設定'],
+  },
+  {
+    id: 'essay_c4_02', case: 'case4', icon: '💎',
+    title: 'NPVとIRRの違い',
+    question: 'NPV法とIRR法の計算目的の違いと、それぞれが適している投資判断の場面を説明せよ。（目安 100字）',
+    keywords: ['正味現在価値', '内部収益率', 'ハードルレート', '割引率', '投資採択', '複数プロジェクト比較', '資本コスト'],
+  },
+  {
+    id: 'essay_c4_03', case: 'case4', icon: '⚖️',
+    title: 'WACCの意義',
+    question: 'WACC（加重平均資本コスト）とは何か説明し、その財務戦略上の意義を述べよ。（目安 100字）',
+    keywords: ['負債コスト', '株主資本コスト', '資本構成', '税効果', '投資採択基準', 'ハードルレート', 'EVA'],
+  },
+];
+
+// ============================================================
 // localStorage
 // ============================================================
 
@@ -1928,6 +2029,7 @@ const DEFAULT_DATA = {
   procedureChecked: [],
   dailyMissionBonus: null,
   reviewSchedule: {},
+  geminiApiKey: '',
 };
 
 function loadData() {
@@ -3237,7 +3339,7 @@ function HistoryTab({ data }) {
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, pendingProblem, onClearPending }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, pendingProblem, onClearPending }) {
   const [view, setView]                   = useState('list');
   const [tabMode, setTabMode]             = useState('study');
   const [selectedCase, setSelectedCase]   = useState('case4');
@@ -3270,6 +3372,12 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
   const [drillScore, setDrillScore]       = useState({ correct: 0, total: 0, streak: 0 });
   const [drillChoice, setDrillChoice]     = useState(null);
   const [drillShowExp, setDrillShowExp]   = useState(false);
+  // 論述
+  const [essayProblem, setEssayProblem]   = useState(null);
+  const [essayAnswer, setEssayAnswer]     = useState('');
+  const [essayFeedback, setEssayFeedback] = useState(null);
+  const [essayLoading, setEssayLoading]   = useState(false);
+  const [essayApiInput, setEssayApiInput] = useState('');
 
   function resetSolver() {
     setCurrentStep(0);
@@ -3499,6 +3607,7 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
             { id: 'analysis', label: '📊 分析' },
             { id: 'exam', label: '🎯 模擬試験' },
             { id: 'drill', label: '⚡ 即トレ' },
+            { id: 'essay', label: '📝 論述' },
           ].map(m => (
             <button
               key={m.id}
@@ -4138,6 +4247,233 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
           );
         })()}
 
+        {/* ===== 論述（Gemini採点） ===== */}
+        {tabMode === 'essay' && (() => {
+          const apiKey = data.geminiApiKey || '';
+
+          async function gradeEssay() {
+            if (!essayAnswer.trim()) return;
+            setEssayLoading(true);
+            setEssayFeedback(null);
+            const prompt = `あなたは中小企業診断士2次試験の採点者です。以下の問題と採点キーワードをもとに、受験者の答案を採点してください。
+
+【問題】
+${essayProblem.question}
+
+【採点キーワード（これらが含まれているか確認）】
+${essayProblem.keywords.join('、')}
+
+【受験者の答案】
+${essayAnswer}
+
+以下のJSON形式のみで回答してください（他のテキストは不要）:
+{"score":X,"good":"良かった点","improve":"改善すべき点","hint":"模範解答のポイント"}
+scoreは0〜10の整数。`;
+            try {
+              const res = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+                }
+              );
+              const json = await res.json();
+              const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              const match = text.match(/\{[\s\S]*\}/);
+              if (match) {
+                const fb = JSON.parse(match[0]);
+                setEssayFeedback(fb);
+                onEssayComplete(fb.score || 0);
+              } else {
+                setEssayFeedback({ score: 0, good: '', improve: '', hint: 'レスポンスの解析に失敗しました。再度お試しください。' });
+              }
+            } catch (e) {
+              setEssayFeedback({ score: 0, good: '', improve: '', hint: `エラー: ${e.message}` });
+            }
+            setEssayLoading(false);
+          }
+
+          // API key 未設定画面
+          if (!apiKey) {
+            return (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <div style={{ fontSize: 40, marginBottom: 16 }}>🔑</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>Gemini APIキーを設定してください</div>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>
+                  Google AI Studio（無料）でAPIキーを取得できます
+                </div>
+                <input
+                  type="text"
+                  value={essayApiInput}
+                  onChange={e => setEssayApiInput(e.target.value)}
+                  placeholder="AIza......"
+                  style={{
+                    width: '100%', padding: '12px 14px', borderRadius: 10,
+                    background: C.card, border: `1px solid ${C.border}`,
+                    color: C.text, fontSize: 13, marginBottom: 12, boxSizing: 'border-box',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => { if (essayApiInput.trim()) onSaveApiKey(essayApiInput.trim()); }}
+                  disabled={!essayApiInput.trim()}
+                  style={{
+                    width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+                    background: essayApiInput.trim() ? `linear-gradient(135deg, ${C.purple}, ${C.accent})` : C.card,
+                    color: essayApiInput.trim() ? '#000' : C.muted,
+                    fontWeight: 700, cursor: essayApiInput.trim() ? 'pointer' : 'default', fontSize: 15,
+                  }}
+                >保存する</button>
+              </div>
+            );
+          }
+
+          // フィードバック画面
+          if (essayFeedback) {
+            const score = essayFeedback.score ?? 0;
+            const scoreColor = score >= 8 ? C.green : score >= 5 ? '#f59e0b' : C.red;
+            return (
+              <div>
+                <div style={{ background: C.card, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>{essayProblem.title}</div>
+                  <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>{essayProblem.question}</div>
+                </div>
+                <div style={{ background: C.card, borderRadius: 16, padding: 20, marginBottom: 16, textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>AI採点結果</div>
+                  <div style={{ fontSize: 52, fontWeight: 900, color: scoreColor }}>{score}</div>
+                  <div style={{ fontSize: 14, color: C.muted }}>/ 10点</div>
+                  <div style={{ fontSize: 13, color: C.gold, marginTop: 8, fontWeight: 700 }}>+{score * 3} XP</div>
+                </div>
+                {essayFeedback.good && (
+                  <div style={{ background: '#0d2d1a', borderRadius: 12, padding: '14px 16px', marginBottom: 12, border: `1px solid ${C.green}44` }}>
+                    <div style={{ fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6 }}>✓ 良かった点</div>
+                    <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{essayFeedback.good}</div>
+                  </div>
+                )}
+                {essayFeedback.improve && (
+                  <div style={{ background: '#2d1a0d', borderRadius: 12, padding: '14px 16px', marginBottom: 12, border: `1px solid ${C.orange}44` }}>
+                    <div style={{ fontSize: 12, color: C.orange, fontWeight: 700, marginBottom: 6 }}>△ 改善すべき点</div>
+                    <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{essayFeedback.improve}</div>
+                  </div>
+                )}
+                {essayFeedback.hint && (
+                  <div style={{ background: '#1a1040', borderRadius: 12, padding: '14px 16px', marginBottom: 20, border: `1px solid ${C.purple}44` }}>
+                    <div style={{ fontSize: 12, color: C.purple, fontWeight: 700, marginBottom: 6 }}>💡 解答のポイント</div>
+                    <div style={{ fontSize: 13, color: '#c4b5fd', lineHeight: 1.6 }}>{essayFeedback.hint}</div>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => { setEssayFeedback(null); setEssayAnswer(''); setEssayProblem(null); }}
+                    style={{
+                      flex: 1, padding: '14px', borderRadius: 12, border: 'none',
+                      background: C.card, color: C.muted, cursor: 'pointer', fontSize: 14,
+                    }}
+                  >問題一覧へ</button>
+                  <button
+                    onClick={() => { setEssayFeedback(null); setEssayAnswer(''); }}
+                    style={{
+                      flex: 1, padding: '14px', borderRadius: 12, border: 'none',
+                      background: `linear-gradient(135deg, ${C.purple}, ${C.accent})`,
+                      color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                    }}
+                  >もう一度解く</button>
+                </div>
+                <div style={{ marginTop: 16, textAlign: 'right' }}>
+                  <button
+                    onClick={() => onSaveApiKey('')}
+                    style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12 }}
+                  >🔑 APIキーを変更</button>
+                </div>
+              </div>
+            );
+          }
+
+          // 解答入力画面
+          if (essayProblem) {
+            return (
+              <div>
+                <button
+                  onClick={() => { setEssayProblem(null); setEssayAnswer(''); }}
+                  style={{ background: 'none', border: 'none', color: C.accent, cursor: 'pointer', fontSize: 14, padding: 0, marginBottom: 16 }}
+                >← 問題一覧へ</button>
+                <div style={{ background: C.card, borderRadius: 12, padding: '16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{essayProblem.icon} {essayProblem.title}</div>
+                  <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7 }}>{essayProblem.question}</div>
+                </div>
+                <textarea
+                  value={essayAnswer}
+                  onChange={e => setEssayAnswer(e.target.value)}
+                  placeholder="ここに解答を記入してください..."
+                  rows={8}
+                  style={{
+                    width: '100%', padding: '14px', borderRadius: 12,
+                    background: C.card, border: `1px solid ${C.border}`,
+                    color: C.text, fontSize: 14, lineHeight: 1.7,
+                    resize: 'vertical', boxSizing: 'border-box', outline: 'none',
+                    marginBottom: 8,
+                  }}
+                />
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, textAlign: 'right' }}>{essayAnswer.length}字</div>
+                <button
+                  onClick={gradeEssay}
+                  disabled={essayLoading || !essayAnswer.trim()}
+                  style={{
+                    width: '100%', padding: '16px', borderRadius: 12, border: 'none',
+                    background: (essayLoading || !essayAnswer.trim()) ? C.card : `linear-gradient(135deg, ${C.purple}, ${C.accent})`,
+                    color: (essayLoading || !essayAnswer.trim()) ? C.muted : '#000',
+                    fontWeight: 700, cursor: (essayLoading || !essayAnswer.trim()) ? 'default' : 'pointer', fontSize: 16,
+                  }}
+                >{essayLoading ? '採点中...' : '📝 AIに採点してもらう'}</button>
+              </div>
+            );
+          }
+
+          // 問題一覧画面
+          const caseProblemMap = { case1: '事例I', case2: '事例II', case3: '事例III', case4: '事例IV' };
+          return (
+            <div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+                問題を選んで解答を書き、AIに採点してもらいましょう
+              </div>
+              {Object.entries(caseProblemMap).map(([caseId, caseLabel]) => {
+                const probs = ESSAY_PROBLEMS.filter(p => p.case === caseId);
+                return (
+                  <div key={caseId} style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.purple, marginBottom: 8 }}>{caseLabel}</div>
+                    {probs.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setEssayProblem(p); setEssayAnswer(''); setEssayFeedback(null); }}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          background: C.card, border: `1px solid ${C.border}`,
+                          borderRadius: 12, padding: '14px 16px', marginBottom: 8,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
+                          {p.icon} {p.title}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                          {p.question}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+              <div style={{ marginTop: 8, textAlign: 'right' }}>
+                <button
+                  onClick={() => onSaveApiKey('')}
+                  style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12 }}
+                >🔑 APIキーを変更</button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ===== 演習（既存） ===== */}
         {tabMode === 'study' && <>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>
@@ -4605,6 +4941,24 @@ export default function App() {
     navigator.vibrate?.([100, 50, 100]);
   }
 
+  function handleEssayComplete(score) {
+    const xp = score * 3;
+    if (xp <= 0) return;
+    const prevLevel = getLevel(data.xp);
+    const hi = buildHistoryItem('📝', `論述採点 ${score}/10点`, xp);
+    const d = applyXpGain(data, xp, hi);
+    commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
+    setReward({ icon: '📝', title: '論述採点完了！', xp, message: `${score}/10点` });
+    setParticles(xp);
+  }
+
+  function handleSaveApiKey(key) {
+    const d = { ...data, geminiApiKey: key };
+    commit(d);
+  }
+
   function handleDrillComplete(correctCount) {
     const xp = correctCount * 5;
     if (xp <= 0) return;
@@ -4793,6 +5147,8 @@ export default function App() {
           onCaseStudyComplete={handleCaseStudyComplete}
           onExamComplete={handleExamComplete}
           onDrillComplete={handleDrillComplete}
+          onEssayComplete={handleEssayComplete}
+          onSaveApiKey={handleSaveApiKey}
           pendingProblem={pendingProblem}
           onClearPending={() => setPendingProblem(null)}
         />
