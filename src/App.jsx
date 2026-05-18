@@ -2045,6 +2045,7 @@ const DEFAULT_DATA = {
   dailyMissionBonus: null,
   reviewSchedule: {},
   geminiApiKey: '',
+  essayHistory: [],
 };
 
 function loadData() {
@@ -3351,10 +3352,62 @@ function HistoryTab({ data }) {
 }
 
 // ============================================================
+// HistoryEssayCard
+// ============================================================
+
+function HistoryEssayCard({ item, scoreColor, caseColors, caseProblemMap }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '14px 16px', cursor: 'pointer' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 6, background: `${caseColors[item.caseId] || '#7c3aed'}22`, color: caseColors[item.caseId] || '#7c3aed', fontWeight: 700 }}>
+              {caseProblemMap[item.caseId] || item.caseId}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{item.title}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: scoreColor }}>{item.score}/10</span>
+            <span style={{ fontSize: 11, color: '#64748b' }}>{item.date}</span>
+            <span style={{ color: '#64748b', fontSize: 12 }}>{open ? '▲' : '▼'}</span>
+          </div>
+        </div>
+      </button>
+      {open && (
+        <div style={{ padding: '0 16px 16px' }}>
+          <div style={{ background: '#0a0e1a', borderRadius: 8, padding: '10px 12px', marginBottom: 10, fontSize: 13, color: '#e2e8f0', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+            {item.answer}
+          </div>
+          {item.good && (
+            <div style={{ fontSize: 12, color: '#10b981', marginBottom: 6 }}>
+              <span style={{ fontWeight: 700 }}>✓ 良かった点：</span>{item.good}
+            </div>
+          )}
+          {item.improve && (
+            <div style={{ fontSize: 12, color: '#f59e0b', marginBottom: 6 }}>
+              <span style={{ fontWeight: 700 }}>△ 改善点：</span>{item.improve}
+            </div>
+          )}
+          {item.hint && (
+            <div style={{ fontSize: 12, color: '#a78bfa' }}>
+              <span style={{ fontWeight: 700 }}>💡 ポイント：</span>{item.hint}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, pendingProblem, onClearPending }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, pendingProblem, onClearPending }) {
   const [view, setView]                   = useState('list');
   const [tabMode, setTabMode]             = useState('study');
   const [selectedCase, setSelectedCase]   = useState('case4');
@@ -3393,6 +3446,7 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
   const [essayFeedback, setEssayFeedback] = useState(null);
   const [essayLoading, setEssayLoading]   = useState(false);
   const [essayApiInput, setEssayApiInput] = useState('');
+  const [essayView, setEssayView]         = useState('list'); // 'list' | 'history'
 
   function resetSolver() {
     setCurrentStep(0);
@@ -3464,6 +3518,18 @@ scoreは0〜10の整数。`;
           const fb = JSON.parse(match[0]);
           setEssayFeedback(fb);
           onEssayComplete(fb.score || 0);
+          onSaveEssayHistory({
+            id: Date.now(),
+            problemId: essayProblem.id,
+            title: essayProblem.title,
+            caseId: essayProblem.case,
+            answer: essayAnswer,
+            score: fb.score || 0,
+            good: fb.good || '',
+            improve: fb.improve || '',
+            hint: fb.hint || '',
+            date: new Date().toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          });
         } catch {
           setEssayFeedback({ score: 0, good: '', improve: '', hint: `JSON解析エラー。Geminiの返答: ${text.slice(0, 200)}` });
         }
@@ -4470,46 +4536,89 @@ scoreは0〜10の整数。`;
             );
           }
 
-          // 問題一覧画面
+          // 問題一覧 / 履歴切り替え
           const caseProblemMap = { case1: '事例I', case2: '事例II', case3: '事例III', case4: '事例IV' };
+          const caseColors = { case1: '#7c3aed', case2: '#0ea5e9', case3: '#f59e0b', case4: '#10b981' };
+          const history = data.essayHistory || [];
+
           return (
             <div>
-              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
-                問題を選んで解答を書き、AIに採点してもらいましょう
+              {/* 一覧 / 履歴 トグル */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                {[{ id: 'list', label: '📋 問題一覧' }, { id: 'history', label: `📜 解答履歴 (${history.length})` }].map(v => (
+                  <button key={v.id} onClick={() => setEssayView(v.id)} style={{
+                    flex: 1, padding: '8px 0', borderRadius: 20, border: 'none',
+                    background: essayView === v.id ? C.accent : C.card,
+                    color: essayView === v.id ? '#000' : C.muted,
+                    fontWeight: essayView === v.id ? 700 : 400,
+                    cursor: 'pointer', fontSize: 12,
+                  }}>{v.label}</button>
+                ))}
               </div>
-              {Object.entries(caseProblemMap).map(([caseId, caseLabel]) => {
-                const probs = ESSAY_PROBLEMS.filter(p => p.case === caseId);
-                return (
-                  <div key={caseId} style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.purple, marginBottom: 8 }}>{caseLabel}</div>
-                    {probs.map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => { setEssayProblem(p); setEssayAnswer(''); setEssayFeedback(null); }}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          background: C.card, border: `1px solid ${C.border}`,
-                          borderRadius: 12, padding: '14px 16px', marginBottom: 8,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
-                          {p.icon} {p.title}
-                        </div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-                          {p.question}
-                        </div>
-                      </button>
-                    ))}
+
+              {/* ===== 問題一覧 ===== */}
+              {essayView === 'list' && (
+                <div>
+                  {Object.entries(caseProblemMap).map(([caseId, caseLabel]) => {
+                    const probs = ESSAY_PROBLEMS.filter(p => p.case === caseId);
+                    return (
+                      <div key={caseId} style={{ marginBottom: 20 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: caseColors[caseId] || C.purple, marginBottom: 8 }}>{caseLabel}</div>
+                        {probs.map(p => {
+                          const attempts = history.filter(h => h.problemId === p.id);
+                          const bestScore = attempts.length ? Math.max(...attempts.map(h => h.score)) : null;
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => { setEssayProblem(p); setEssayAnswer(''); setEssayFeedback(null); }}
+                              style={{
+                                display: 'block', width: '100%', textAlign: 'left',
+                                background: C.card, border: `1px solid ${C.border}`,
+                                borderRadius: 12, padding: '14px 16px', marginBottom: 8,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{p.icon} {p.title}</div>
+                                {bestScore !== null && (
+                                  <div style={{
+                                    fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 8,
+                                    background: bestScore >= 8 ? `${C.green}22` : bestScore >= 5 ? '#f59e0b22' : `${C.red}22`,
+                                    color: bestScore >= 8 ? C.green : bestScore >= 5 ? '#f59e0b' : C.red,
+                                  }}>最高 {bestScore}/10</div>
+                                )}
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>{p.question}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                  <div style={{ marginTop: 8, textAlign: 'right' }}>
+                    <button onClick={() => onSaveApiKey('')} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12 }}>🔑 APIキーを変更</button>
                   </div>
-                );
-              })}
-              <div style={{ marginTop: 8, textAlign: 'right' }}>
-                <button
-                  onClick={() => onSaveApiKey('')}
-                  style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12 }}
-                >🔑 APIキーを変更</button>
-              </div>
+                </div>
+              )}
+
+              {/* ===== 解答履歴 ===== */}
+              {essayView === 'history' && (
+                history.length === 0 ? (
+                  <div style={{ padding: '60px 0', textAlign: 'center', color: C.muted }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
+                    <div>まだ解答履歴がありません</div>
+                  </div>
+                ) : (
+                  <div>
+                    {[...history].reverse().map(h => {
+                      const scoreColor = h.score >= 8 ? C.green : h.score >= 5 ? '#f59e0b' : C.red;
+                      return (
+                        <HistoryEssayCard key={h.id} item={h} scoreColor={scoreColor} caseColors={caseColors} caseProblemMap={caseProblemMap} />
+                      );
+                    })}
+                  </div>
+                )
+              )}
             </div>
           );
         })()}
@@ -4999,6 +5108,11 @@ export default function App() {
     commit(d);
   }
 
+  function handleSaveEssayHistory(entry) {
+    const d = { ...data, essayHistory: [...(data.essayHistory || []), entry] };
+    commit(d);
+  }
+
   function handleDrillComplete(correctCount) {
     const xp = correctCount * 5;
     if (xp <= 0) return;
@@ -5189,6 +5303,7 @@ export default function App() {
           onDrillComplete={handleDrillComplete}
           onEssayComplete={handleEssayComplete}
           onSaveApiKey={handleSaveApiKey}
+          onSaveEssayHistory={handleSaveEssayHistory}
           pendingProblem={pendingProblem}
           onClearPending={() => setPendingProblem(null)}
         />
