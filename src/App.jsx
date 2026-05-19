@@ -4478,7 +4478,7 @@ scoreは0〜10の整数。`;
                     }}
                   >問題一覧へ</button>
                   <button
-                    onClick={() => { setEssayFeedback(null); setEssayAnswer(''); }}
+                    onClick={() => { setEssayFeedback(null); }}
                     style={{
                       flex: 1, padding: '14px', borderRadius: 12, border: 'none',
                       background: `linear-gradient(135deg, ${C.purple}, ${C.accent})`,
