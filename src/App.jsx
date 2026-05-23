@@ -73,6 +73,16 @@ const C = {
   border: '#1f2937',
 };
 
+const GOODNOTES_STORE_URL = 'https://apps.apple.com/jp/app/goodnotes-6/id1444383602';
+const AAS_URL = 'https://www.aas-clover.com/member/';
+
+function openGoodNotes() {
+  window.location.href = 'goodnotes://';
+  setTimeout(() => {
+    if (!document.hidden) window.open(GOODNOTES_STORE_URL, '_blank');
+  }, 1500);
+}
+
 // ============================================================
 // Finance Problems
 // ============================================================
@@ -2162,6 +2172,7 @@ const DEFAULT_DATA = {
   reviewSchedule: {},
   geminiApiKey: '',
   essayHistory: [],
+  stampCalendar: {},
 };
 
 function loadData() {
@@ -2306,6 +2317,25 @@ function TimerModal({ item, onClose, onComplete }) {
           {item.title || item.name}
         </div>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>目安: {item.minutes}分</div>
+
+        {/* External links */}
+        {(item.title === 'GoodNotesを開く' || item.id === 'jireifolder') && (
+          <button onClick={openGoodNotes} style={{
+            display: 'block', width: '100%', marginBottom: 12,
+            padding: '9px 0', borderRadius: 10, border: `1px solid ${C.accent}`,
+            background: `${C.accent}15`, color: C.accent,
+            fontWeight: 700, cursor: 'pointer', fontSize: 13,
+          }}>📓 GoodNotesを開く</button>
+        )}
+        {item.id === 'aasvideo' && (
+          <a href={AAS_URL} target="_blank" rel="noreferrer" style={{
+            display: 'block', width: '100%', marginBottom: 12,
+            padding: '9px 0', borderRadius: 10, border: `1px solid ${C.accent}`,
+            background: `${C.accent}15`, color: C.accent,
+            fontWeight: 700, cursor: 'pointer', fontSize: 13,
+            textDecoration: 'none', textAlign: 'center',
+          }}>🎬 AASサイトを開く</a>
+        )}
 
         <button
           onClick={() => setCountdown(c => !c)}
@@ -2686,6 +2716,9 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
       {/* Weekly chart */}
       <WeeklyChart weeklyData={data.weeklyData} todayIndex={todayIndex} />
 
+      {/* Monthly stamp calendar */}
+      <MonthlyStampCalendar stampCalendar={data.stampCalendar} />
+
       {/* Quick actions */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
         <button onClick={() => onNavigate('procedure')} style={{
@@ -2776,6 +2809,18 @@ function QuestTab({ data, onCompleteQuest, onNavigate }) {
                 <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{quest.name}</div>
                 <div style={{ fontSize: 11, color: C.muted }}>▶ {quest.minutes}分 · +{quest.xp} XP</div>
               </div>
+              {quest.id === 'jireifolder' && (
+                <button onClick={(e) => { e.stopPropagation(); openGoodNotes(); }} style={{
+                  background: 'none', border: 'none', fontSize: 18, cursor: 'pointer',
+                  padding: '0 4px', color: C.accent,
+                }} title="GoodNotesを開く">🔗</button>
+              )}
+              {quest.id === 'aasvideo' && (
+                <a href={AAS_URL} target="_blank" rel="noreferrer"
+                   onClick={(e) => e.stopPropagation()} style={{
+                  fontSize: 18, padding: '0 4px', color: C.accent, textDecoration: 'none',
+                }} title="AASサイトを開く">🔗</a>
+              )}
               {done ? (
                 <div style={{ fontSize: 20, color: C.green }}>✓</div>
               ) : (
@@ -5095,6 +5140,195 @@ function BottomNav({ active, onChange, remainingCount }) {
 }
 
 // ============================================================
+// LoginGreetingModal
+// ============================================================
+
+function LoginGreetingModal({ streak, onClose }) {
+  const hour = new Date().getHours();
+  const greeting =
+    hour >= 5 && hour < 11 ? 'おはようございます！ ☀️' :
+    hour >= 11 && hour < 17 ? 'こんにちは！ 🌤️' :
+    hour >= 17 && hour < 21 ? 'こんばんは！ 🌙' : 'お疲れ様！ 🌙';
+
+  const streakMsg =
+    streak === 0 ? '久しぶり！また頑張ろう！' :
+    streak === 1 ? '昨日に続いて来たね！いいね！' :
+    streak < 3   ? `${streak}日連続！いいリズム！` :
+    streak < 7   ? `${streak}日連続！習慣になってきた！` :
+    streak < 14  ? '1週間以上！本物の受験生！' :
+    streak < 30  ? '2週間以上！絶好調！' :
+                   '1ヶ月連続！合格目指して最後まで！';
+
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000,
+    }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: 'linear-gradient(135deg, #0d1a2e, #1a1040)',
+        border: `2px solid ${C.gold}`,
+        borderRadius: 24, padding: '36px 32px',
+        textAlign: 'center', minWidth: 290, maxWidth: 340,
+        boxShadow: `0 0 60px ${C.gold}33`,
+      }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color: C.text, marginBottom: 20 }}>{greeting}</div>
+        {streak > 0 && (
+          <div style={{
+            fontSize: 32, fontWeight: 700, marginBottom: 8,
+            background: `linear-gradient(135deg, ${C.orange}, ${C.gold})`,
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          }}>🔥 {streak}日連続！</div>
+        )}
+        <div style={{ fontSize: 16, color: C.accent, fontWeight: 600, marginBottom: 20 }}>{streakMsg}</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 28 }}>{dateStr}</div>
+        <button onClick={onClose} style={{
+          width: '100%', padding: '14px 0', borderRadius: 14, border: 'none',
+          background: `linear-gradient(135deg, ${C.purple}, ${C.accent})`,
+          color: '#000', fontWeight: 700, fontSize: 16, cursor: 'pointer',
+        }}>よし、始めよう！ →</button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// StampAnimation
+// ============================================================
+
+function StampAnimation({ type, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 2200);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  const isEvolved = type === 'evolved';
+  const emoji = isEvolved ? '🌟' : '⭐';
+  const label = isEvolved ? 'スタンプ進化！' : '今日のスタンプ獲得！';
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      zIndex: 2500,
+    }}>
+      <style>{`
+        @keyframes stampPress {
+          0%   { transform: scale(2.2); opacity: 0; }
+          40%  { transform: scale(0.85); opacity: 1; }
+          65%  { transform: scale(1.1); }
+          100% { transform: scale(1.0); opacity: 1; }
+        }
+        @keyframes stampLabel {
+          0%   { opacity: 0; transform: translateY(10px); }
+          60%  { opacity: 0; transform: translateY(10px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+      <div style={{
+        fontSize: 90,
+        animation: 'stampPress 0.55s cubic-bezier(0.22,1,0.36,1) forwards',
+        filter: isEvolved ? 'drop-shadow(0 0 20px #ffd700)' : 'drop-shadow(0 0 16px #10b981)',
+      }}>{emoji}</div>
+      <div style={{
+        fontSize: 20, fontWeight: 700, marginTop: 16,
+        color: isEvolved ? C.gold : C.green,
+        animation: 'stampLabel 0.8s ease forwards',
+      }}>{label}</div>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: 8, animation: 'stampLabel 1s ease forwards' }}>
+        タップで閉じる
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MonthlyStampCalendar
+// ============================================================
+
+function MonthlyStampCalendar({ stampCalendar }) {
+  const now = new Date();
+  const [viewYear,  setViewYear]  = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth()); // 0-based
+
+  const todayStr2 = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' });
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstDow    = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
+    else setViewMonth(m => m - 1);
+  }
+  function nextMonth() {
+    const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth();
+    if (isCurrentMonth) return;
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
+    else setViewMonth(m => m + 1);
+  }
+
+  const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth();
+
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <button onClick={prevMonth} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 18, padding: '0 8px' }}>◀</button>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>📅 {monthLabel}</div>
+        <button onClick={nextMonth} style={{
+          background: 'none', border: 'none',
+          color: isCurrentMonth ? '#333' : C.muted,
+          cursor: isCurrentMonth ? 'default' : 'pointer', fontSize: 18, padding: '0 8px',
+        }}>▶</button>
+      </div>
+      {/* Day-of-week headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 3 }}>
+        {['日','月','火','水','木','金','土'].map((d, i) => (
+          <div key={d} style={{
+            fontSize: 10, textAlign: 'center', color: i === 0 ? '#f87171' : i === 6 ? '#60a5fa' : C.muted,
+            fontWeight: 700,
+          }}>{d}</div>
+        ))}
+      </div>
+      {/* Date cells */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
+        {cells.map((day, idx) => {
+          if (!day) return <div key={`e${idx}`} />;
+          const dateKey = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const isToday = dateKey === todayStr2;
+          const stamp   = (stampCalendar || {})[dateKey]; // 1 or 2
+          const isFuture = !isToday && new Date(viewYear, viewMonth, day) > now;
+
+          return (
+            <div key={dateKey} style={{
+              aspectRatio: '1', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              borderRadius: 8,
+              background: stamp === 2 ? `${C.gold}22` : stamp === 1 ? `${C.green}22` : 'transparent',
+              border: isToday && !stamp ? `1.5px solid ${C.accent}` : isToday && stamp ? `1.5px solid ${stamp === 2 ? C.gold : C.green}` : '1.5px solid transparent',
+              boxShadow: isToday && stamp ? `0 0 8px ${stamp === 2 ? C.gold : C.green}66` : 'none',
+              opacity: isFuture ? 0.2 : 1,
+            }}>
+              {stamp ? (
+                <div style={{ fontSize: 16, lineHeight: 1 }}>{stamp === 2 ? '🌟' : '⭐'}</div>
+              ) : (
+                <div style={{ fontSize: 11, color: isToday ? C.accent : C.muted, fontWeight: isToday ? 700 : 400 }}>{day}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // App
 // ============================================================
 
@@ -5105,6 +5339,12 @@ export default function App() {
   const [particles, setParticles] = useState(null);
   const [levelUp,  setLevelUp]  = useState(null);
   const [pendingProblem, setPendingProblem] = useState(null);
+  const [showGreeting, setShowGreeting] = useState(false);
+  const [showStamp, setShowStamp] = useState(null); // null | 'basic' | 'evolved'
+
+  useEffect(() => {
+    if (loadData().lastDate !== todayStr()) setShowGreeting(true);
+  }, []);
 
   function commit(newData) {
     setData(newData);
@@ -5169,6 +5409,13 @@ export default function App() {
     let d = applyXpGain(data, quest.xp, hi);
     d.completedToday = [...(d.completedToday || []), quest.id];
 
+    // スタンプ: その日最初のタスク完了 → 基本スタンプ
+    const cal = d.stampCalendar || {};
+    if (data.completedToday.length === 0 && !cal[today]) {
+      d.stampCalendar = { ...cal, [today]: 1 };
+      setTimeout(() => setShowStamp('basic'), 3200);
+    }
+
     const missions = getDailyMissions(today);
     const allMissionsDone = missions.every(id => d.completedToday.includes(id));
     let bonusXp = 0;
@@ -5176,6 +5423,9 @@ export default function App() {
       d.dailyMissionBonus = today;
       bonusXp = 150;
       d.xp = (d.xp || 0) + bonusXp;
+      // スタンプ進化
+      d.stampCalendar = { ...(d.stampCalendar || {}), [today]: 2 };
+      setTimeout(() => setShowStamp('evolved'), 5200);
     }
 
     commit(d);
@@ -5430,6 +5680,8 @@ export default function App() {
       {reward   && <RewardPopup  reward={reward}  onClose={() => setReward(null)}   />}
       {particles && <XPParticles xp={particles}   onDone={() => setParticles(null)} />}
       {levelUp  && <LevelUpModal level={levelUp}  onClose={() => setLevelUp(null)}  />}
+      {showGreeting && <LoginGreetingModal streak={data.streak || 0} onClose={() => setShowGreeting(false)} />}
+      {showStamp    && <StampAnimation type={showStamp} onClose={() => setShowStamp(null)} />}
     </div>
   );
 }
