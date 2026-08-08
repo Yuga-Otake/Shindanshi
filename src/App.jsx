@@ -2020,6 +2020,49 @@ const SIGNAL_KW_KEY = (() => {
   return w => m[w] || w;
 })();
 
+// 互いに「代替解答として成立しうる」語のまとまり。
+// 正解にこのクラスタの語が含まれる場合、同クラスタの他の語は誤答肢にしない
+// （例：属人化への対策に「暗黙知継承」を誤答として出すと不正解に納得感がない）
+const SIGNAL_KW_RELATED = [
+  // 育成・技能伝承（属人化と技能継承がここで衝突していた）
+  ['OJT', 'ジョブローテーション', '多能工化', '暗黙知継承', 'マニュアル整備', '標準化',
+   '作業標準化', '属人化の解消', '再雇用制度', '世代交代のバランス'],
+  // 権限・意思決定
+  ['権限委譲', '段階的権限委譲', '分権化', '自律性の醸成', 'スピード経営', '事業別組織への再編'],
+  // 情報共有（事例Iと事例IIIをまたぐ）
+  ['横断的会議体', '多職種連携', '情報共有の仕組み化', 'DRINK', '工程管理システム(MES)', '見える化'],
+  // ブランド・差別化
+  ['差別化', 'チャネル別差別化', '高付加価値化', 'ブランド構築', 'ブランド浸透',
+   '価格以外の価値訴求', '限定性', '希少価値'],
+  // 認知・体験・発信
+  ['SNS活用', '口コミ', 'ストーリー訴求', '試飲', '体験価値の提供', '地元連携',
+   'コト消費', '地域ブランド'],
+  // ニーズ把握
+  ['ヒアリング', 'POS活用', 'インサイト', 'マーケットイン', 'ニーズ収集'],
+  // 段取り・リードタイム
+  ['内段取の外段取化', 'SMED', 'リードタイム短縮', '段取短縮', 'セル生産', 'フレキシビリティ'],
+  // 品質
+  ['ポカヨケ', 'チェック機構', 'QC活動', '原因分析', '是正処置', '横展開', '品質監査', '基準共有'],
+  // 生産計画・在庫
+  ['需要予測', '生産計画見直し', '在庫回転率', 'JIT', '平準化', '生産計画最適化'],
+];
+
+// 語 → 所属クラスタIDの配列（どのクラスタにも属さない語は空配列）
+const SIGNAL_KW_RELATED_KEYS = (() => {
+  const m = {};
+  SIGNAL_KW_RELATED.forEach((g, i) => g.forEach(w => { (m[w] = m[w] || []).push('r' + i); }));
+  return w => m[w] || [];
+})();
+
+// 語 → その語が登場する事例の集合（同事例の語は文脈が近いので誤答では後回しにする）
+const SIGNAL_KW_CASES = (() => {
+  const m = {};
+  SIGNAL_WORDS.forEach(x => x.direction.split('・').forEach(k => {
+    (m[k] = m[k] || new Set()).add(x.case);
+  }));
+  return m;
+})();
+
 function getSignalStars(mastery) {
   const s = mastery?.streak || 0;
   if (s >= 5) return 3;
@@ -5057,10 +5100,26 @@ scoreは0〜10の整数。`;
       if (mode === 'quiz') {
         // 即答＝キーワード群から関連する語をすべて選ぶ形式
         const kwAnswer = w.direction.split('・');
-        // 正解語と同義グループの語は誤答にしない（実質同じなのに不正解を防ぐ）
-        const banned = new Set(kwAnswer.map(SIGNAL_KW_KEY));
-        const distractors = shuffleArray(allKw.filter(k => !banned.has(SIGNAL_KW_KEY(k))))
-          .slice(0, Math.max(4, 9 - kwAnswer.length));
+        const answerSet = new Set(kwAnswer);
+        const need = Math.max(4, 9 - kwAnswer.length);
+        // ① 同義グループの語は誤答にしない（実質同じなのに不正解を防ぐ）
+        const bannedSyn = new Set(kwAnswer.map(SIGNAL_KW_KEY));
+        // ② 代替解答として成立しうる関連概念の語も誤答にしない
+        const bannedRel = new Set(kwAnswer.flatMap(SIGNAL_KW_RELATED_KEYS));
+        const safe = allKw.filter(k =>
+          !answerSet.has(k) &&
+          !bannedSyn.has(SIGNAL_KW_KEY(k)) &&
+          !SIGNAL_KW_RELATED_KEYS(k).some(g => bannedRel.has(g))
+        );
+        // 候補が足りない場合は②だけ緩める（①同義の除外は必ず維持する）
+        if (safe.length < need) {
+          const relaxed = allKw.filter(k => !answerSet.has(k) && !bannedSyn.has(SIGNAL_KW_KEY(k)) && !safe.includes(k));
+          safe.push(...shuffleArray(relaxed));
+        }
+        // ③ 他事例の語を優先し、同事例の語は後回しにする
+        const otherCase = safe.filter(k => !SIGNAL_KW_CASES[k]?.has(w.case));
+        const sameCase  = safe.filter(k =>  SIGNAL_KW_CASES[k]?.has(w.case));
+        const distractors = [...shuffleArray(otherCase), ...shuffleArray(sameCase)].slice(0, need);
         return { word: w, choices: null, kwAnswer, kwPool: shuffleArray([...kwAnswer, ...distractors]) };
       }
 
