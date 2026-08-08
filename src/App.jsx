@@ -1965,6 +1965,43 @@ const SIGNAL_WORDS = [
     segments: ['顧客からの小ロット短納期の要請が増えている。', 'C社はこれに応えたいと考えているが、', '大量生産向けのライン構成では柔軟に対応できない。'], answerIdx: 2 },
 ];
 
+// charPlan（例「①35字＋②35字＋効果30字」）を区画に分解する
+function parseCharPlan(charPlan) {
+  if (!charPlan) return [];
+  return charPlan.split('＋').map(seg => {
+    const m = seg.match(/(\d+)字/);
+    return { label: seg.replace(/\d+字/, '').trim() || '　', chars: m ? Number(m[1]) : 0 };
+  }).filter(x => x.chars > 0);
+}
+
+// 最長共通部分列の長さ（写し書きの一致率に使う。100字程度なのでコストは無視できる）
+function lcsLength(a, b) {
+  const n = a.length, m = b.length;
+  if (!n || !m) return 0;
+  let prev = new Array(m + 1).fill(0);
+  let cur  = new Array(m + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    }
+    [prev, cur] = [cur, prev];
+    cur.fill(0);
+  }
+  return prev[m];
+}
+
+// 記憶モードの採点。必須語は blanks のみ（keywordAnswer は概念ラベルで
+// 模範解答には活用形で現れるため、literal 一致の採点には使えない）
+function gradeRecallText(prob, text) {
+  const t = (text || '').trim();
+  const keys = prob.blanks;
+  const hit = keys.filter(k => t.includes(k));
+  const coverage = keys.length ? Math.round(hit.length / keys.length * 100) : 0;
+  const target = prob.modelAnswer.length;
+  const lenOk = t.length > 0 && t.length <= 100 && Math.abs(t.length - target) <= target * 0.25;
+  return { coverage, hit, missed: keys.filter(k => !t.includes(k)), len: t.length, target, lenOk };
+}
+
 // 表記統一しきれない近い意味の語をグループ化する。
 // 誤答肢を選ぶとき、正解と同じグループの語は除外して「実質同じなのに不正解」を防ぐ。
 const SIGNAL_KW_GROUPS = [
@@ -2951,6 +2988,7 @@ const DEFAULT_DATA = {
   signalBest: {},      // { attack: 最高スコア, highlight: 最高スコア }
   aiQaHistory: [],  // AI質問履歴
   processProgress: {}, // { [probId]: { attempts, bestSteps } }  bestSteps は 0..4
+  writingProgress: {}, // { [probId]: { copied, recalled, bestCoverage } }
 };
 
 function loadData() {
@@ -4713,7 +4751,7 @@ function PastQaPanel({ refId, history }) {
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, onSignalComplete, onProcessComplete, onSaveAiQa, pendingProblem, onClearPending }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, onSignalComplete, onProcessComplete, onWritingComplete, onSaveAiQa, pendingProblem, onClearPending }) {
   const [view, setView]                   = useState('list');
   const [tabMode, setTabMode]             = useState('study');
   const [selectedCase, setSelectedCase]   = useState('case4');
@@ -4778,6 +4816,13 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
   const [procStepFlags, setProcStepFlags] = useState([]);       // 現在の問題の各ステップ正誤
   const [procFreeInput, setProcFreeInput] = useState(false);
   const [procBlankIdx, setProcBlankIdx]   = useState(0);        // Step4 チップモードで次に埋める空欄
+  // 写経（写し書き／記憶で書く）
+  const [wrPhase, setWrPhase]   = useState('menu');   // 'menu'|'copy'|'recall'|'result'
+  const [wrCases, setWrCases]   = useState(['case1','case2','case3']);
+  const [wrProb, setWrProb]     = useState(null);
+  const [wrText, setWrText]     = useState('');
+  const [wrHint, setWrHint]     = useState(0);        // 0..3 開示済みヒント段階
+  const [wrResult, setWrResult] = useState(null);
   // AIに質問
   const [aiQaContext, setAiQaContext]     = useState(null);
 
@@ -5130,6 +5175,9 @@ scoreは0〜10の整数。`;
         usageTarget,
         usageChoices,
         usageCorrect: usageChoices.indexOf(KEYWORD_USAGE[usageTarget]),
+        // データ上は正解が先頭に並んでいるため、出題時に必ずシャッフルする
+        kwPool:    shuffleArray(p.keywordPool),
+        blankPool: shuffleArray(p.blankPool),
       };
     });
   }
@@ -5196,6 +5244,42 @@ scoreは0〜10の整数。`;
     setProcRevealed(false);
     setProcStepFlags([]);
     setProcBlankIdx(0);
+  }
+
+  // ===== 写経（写し書き／記憶で書く） =====
+
+  // 実施回数の少ない問題を優先して1問選ぶ
+  function pickWritingProb(mode) {
+    const pool = PROCESS_PROBLEMS.filter(p => wrCases.includes(p.case));
+    if (pool.length === 0) return null;
+    const prog = data.writingProgress || {};
+    const cnt = p => (prog[p.id]?.[mode === 'copy' ? 'copied' : 'recalled'] || 0);
+    const min = Math.min(...pool.map(cnt));
+    return shuffleArray(pool.filter(p => cnt(p) === min))[0];
+  }
+
+  function startWriting(mode) {
+    const p = pickWritingProb(mode);
+    if (!p) return;
+    setWrProb(p);
+    setWrText('');
+    setWrHint(0);
+    setWrResult(null);
+    setWrPhase(mode);
+  }
+
+  function finishCopy() {
+    if (!wrProb) return;
+    const ratio = Math.round(lcsLength(wrText.trim(), wrProb.modelAnswer) / wrProb.modelAnswer.length * 100);
+    setWrResult({ mode: 'copy', ratio, len: wrText.trim().length, target: wrProb.modelAnswer.length });
+    setWrPhase('result');
+  }
+
+  function gradeRecall() {
+    if (!wrProb) return;
+    const g = gradeRecallText(wrProb, wrText);
+    setWrResult({ mode: 'recall', ...g, hintsUsed: wrHint });
+    setWrPhase('result');
   }
 
   // 途中終了：現在の問題までの結果で結果画面へ
@@ -5302,11 +5386,12 @@ scoreは0〜10の整数。`;
             { id: 'drill', label: '⚡ 即トレ' },
             { id: 'signal', label: '🚦 シグナル' },
             { id: 'process', label: '🎯 プロセス' },
+            { id: 'writing', label: '✍️ 写経' },
             { id: 'essay', label: '📝 論述' },
           ].map(m => (
             <button
               key={m.id}
-              onClick={() => { setTabMode(m.id); setCardSession(null); setExpandedTopic(null); setSigPhase('menu'); setProcPhase('menu'); }}
+              onClick={() => { setTabMode(m.id); setCardSession(null); setExpandedTopic(null); setSigPhase('menu'); setProcPhase('menu'); setWrPhase('menu'); }}
               style={{
                 padding: '8px 14px', borderRadius: 20, border: 'none', flexShrink: 0,
                 background: tabMode === m.id ? C.accent : C.card,
@@ -5914,7 +5999,7 @@ scoreは0〜10の整数。`;
                       この課題への解答に使うキーワードをすべて選べ（{p.keywordAnswer.length}個）
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-                      {p.keywordPool.map(kw => {
+                      {item.kwPool.map(kw => {
                         const sel = (procPick || []).includes(kw);
                         const isAns = p.keywordAnswer.includes(kw);
                         let bg = C.card, bd = C.border, color = C.text;
@@ -6048,7 +6133,7 @@ scoreは0〜10の整数。`;
                           空欄［{procBlankIdx + 1}］に入る語を選択
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-                          {p.blankPool.map(w => (
+                          {item.blankPool.map(w => (
                             <button key={w}
                               onClick={() => setProcPick(cur => {
                                 const a = [...(cur || [])];
@@ -6215,6 +6300,292 @@ scoreは0〜10の整数。`;
                       {[0, 1, 2, 3, 4].map(i => (
                         <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i < best ? C.green : '#334155', display: 'inline-block' }} />
                       ))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* ===== 写経（写し書き／記憶で書く） ===== */}
+        {tabMode === 'writing' && (() => {
+          const caseLabelsW = { case1: '事例I', case2: '事例II', case3: '事例III' };
+          const caseColorsW = { case1: '#7c3aed', case2: '#0ea5e9', case3: '#f59e0b' };
+          const wProg = data.writingProgress || {};
+
+          // ---- 結果画面 ----
+          if (wrPhase === 'result' && wrResult && wrProb) {
+            const r = wrResult;
+            const xp = r.mode === 'copy'
+              ? 10
+              : Math.max(0, Math.round(r.coverage / 100 * 30) + (r.lenOk ? 5 : 0) - r.hintsUsed * 5);
+            return (
+              <div style={{ padding: '16px 0' }}>
+                <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                  <div style={{ fontSize: 44, marginBottom: 8 }}>{r.mode === 'copy' ? '✍️' : (r.coverage >= 80 ? '🎉' : '📝')}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+                    {r.mode === 'copy' ? '写し書き完了' : '採点結果'}
+                  </div>
+                  {r.mode === 'copy' ? (
+                    <>
+                      <div style={{ fontSize: 38, fontWeight: 700, color: C.accent }}>一致率 {r.ratio}%</div>
+                      <div style={{ fontSize: 13, color: C.muted }}>{r.len}字 / 模範 {r.target}字</div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 38, fontWeight: 700, color: r.coverage >= 80 ? C.green : r.coverage >= 50 ? '#f59e0b' : C.red }}>
+                        キーワード {r.coverage}%
+                      </div>
+                      <div style={{ fontSize: 13, color: r.lenOk ? C.green : '#f59e0b', marginBottom: 4 }}>
+                        {r.len}字 / 目安 {r.target}字 {r.lenOk ? '✓ 字数OK' : '△ 字数に開きあり'}
+                      </div>
+                      {r.hintsUsed > 0 && <div style={{ fontSize: 12, color: C.muted }}>ヒント {r.hintsUsed}段階使用（−{r.hintsUsed * 5} XP）</div>}
+                    </>
+                  )}
+                  <div style={{ fontSize: 13, color: C.gold, marginTop: 6, fontWeight: 700 }}>＋{xp} XP</div>
+                </div>
+
+                {r.mode === 'recall' && (
+                  <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 16, border: `1px solid ${C.border}` }}>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>必須キーワード</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {wrProb.blanks.map(k => {
+                        const ok = r.hit.includes(k);
+                        return (
+                          <span key={k} style={{
+                            fontSize: 12, padding: '5px 11px', borderRadius: 20, fontWeight: 700,
+                            background: ok ? `${C.green}22` : `${C.red}22`,
+                            color: ok ? C.green : C.red, border: `1px solid ${ok ? C.green : C.red}55`,
+                          }}>{ok ? '✓ ' : '✗ '}{k}</span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {r.mode === 'recall' && wrText.trim() && (
+                  <div style={{ background: C.card, borderRadius: 12, padding: '12px 14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 5 }}>あなたの解答</div>
+                    <div style={{ fontSize: 13, color: C.text, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>{wrText.trim()}</div>
+                  </div>
+                )}
+
+                <div style={{ background: '#0a1a0a', borderRadius: 12, padding: '14px 16px', marginBottom: 20, border: `1px solid ${C.green}44` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>📄 模範解答</span>
+                    <span style={{ fontSize: 11, color: C.muted }}>{wrProb.modelAnswer.length}字</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#86efac', lineHeight: 1.8 }}>{wrProb.modelAnswer}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => {
+                      onWritingComplete({ mode: r.mode, probId: wrProb.id, coverage: r.coverage || 0, lenOk: !!r.lenOk, hintsUsed: r.hintsUsed || 0, xp });
+                      startWriting(r.mode);
+                    }}
+                    style={{ flex: 1, padding: '14px', borderRadius: 12, border: `1px solid ${C.accent}`, background: 'transparent', color: C.accent, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+                    🔁 次の問題
+                  </button>
+                  <button onClick={() => {
+                      onWritingComplete({ mode: r.mode, probId: wrProb.id, coverage: r.coverage || 0, lenOk: !!r.lenOk, hintsUsed: r.hintsUsed || 0, xp });
+                      setWrPhase('menu');
+                    }}
+                    style={{ flex: 1, padding: '14px', borderRadius: 12, border: 'none', background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+                    記録して終了
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // ---- 実行中 ----
+          if ((wrPhase === 'copy' || wrPhase === 'recall') && wrProb) {
+            const p = wrProb;
+            const pat = ANSWER_PATTERNS.find(x => x.id === p.patternAnswer);
+            const segs = parseCharPlan(pat?.charPlan);
+            const total = segs.reduce((n, x) => n + x.chars, 0) || p.modelAnswer.length;
+            const len = wrText.trim().length;
+            const ratio = wrPhase === 'copy' && len > 0
+              ? Math.round(lcsLength(wrText.trim(), p.modelAnswer) / p.modelAnswer.length * 100) : 0;
+
+            return (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <button onClick={() => setWrPhase('menu')} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12 }}>← やめる</button>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{wrPhase === 'copy' ? '✍️ 写し書き' : '🧠 記憶で書く'}</div>
+                  <span style={{ fontSize: 10, color: caseColorsW[p.case], fontWeight: 700 }}>{caseLabelsW[p.case]}</span>
+                </div>
+
+                <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 5 }}>設問</div>
+                  <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7 }}>{p.questionText}</div>
+                </div>
+
+                {/* 写し書きは模範解答を常時表示 */}
+                {wrPhase === 'copy' && (
+                  <div style={{ background: '#0a1a0a', borderRadius: 12, padding: '14px 16px', marginBottom: 12, border: `1px solid ${C.green}44` }}>
+                    <div style={{ fontSize: 11, color: C.green, fontWeight: 700, marginBottom: 5 }}>📄 これを書き写す</div>
+                    <div style={{ fontSize: 14, color: '#86efac', lineHeight: 2 }}>{p.modelAnswer}</div>
+                  </div>
+                )}
+
+                {/* 記憶モードの段階ヒント */}
+                {wrPhase === 'recall' && (
+                  <div style={{ marginBottom: 12 }}>
+                    {wrHint >= 1 && (
+                      <div style={{ background: `${C.purple}15`, border: `1px solid ${C.purple}44`, borderRadius: 10, padding: '10px 12px', marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, color: C.purple, fontWeight: 700 }}>解答の型　</span>
+                        <span style={{ fontSize: 13, color: C.text }}>{pat?.label}</span>
+                      </div>
+                    )}
+                    {wrHint >= 2 && (
+                      <div style={{ background: `${C.purple}15`, border: `1px solid ${C.purple}44`, borderRadius: 10, padding: '10px 12px', marginBottom: 6 }}>
+                        <div style={{ fontSize: 12, color: C.accent, fontFamily: 'monospace', marginBottom: 3 }}>📝 {pat?.form}</div>
+                        <div style={{ fontSize: 12, color: C.gold }}>📏 {pat?.charPlan}</div>
+                      </div>
+                    )}
+                    {wrHint >= 3 && (
+                      <div style={{ background: `${C.purple}15`, border: `1px solid ${C.purple}44`, borderRadius: 10, padding: '10px 12px', marginBottom: 6 }}>
+                        <div style={{ fontSize: 11, color: C.purple, fontWeight: 700, marginBottom: 5 }}>キーワード</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {p.blanks.map(k => (
+                            <span key={k} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 20, background: C.card, color: C.text, border: `1px solid ${C.border}` }}>{k}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {wrHint < 3 && (
+                      <button onClick={() => setWrHint(h => h + 1)}
+                        style={{ width: '100%', padding: '10px', borderRadius: 10, border: `1px dashed ${C.purple}66`, background: 'transparent', color: C.purple, cursor: 'pointer', fontSize: 12 }}>
+                        💡 ヒントを開く（{wrHint + 1}/3 · −5XP）　次: {['解答の型', '文章の形と字数配分', 'キーワード'][wrHint]}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* 字数配分バー */}
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                    <span style={{ color: C.muted }}>📏 {pat?.charPlan}</span>
+                    <span style={{ color: len > 100 ? C.red : len > total ? '#f59e0b' : C.accent, fontWeight: 700 }}>
+                      {len} / {total}字{len > 100 ? '（100字超過）' : ''}
+                    </span>
+                  </div>
+                  <div style={{ position: 'relative', height: 10, background: C.bg, borderRadius: 5, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+                    <div style={{
+                      height: '100%', width: `${Math.min(len / Math.max(total, 1) * 100, 100)}%`,
+                      background: len > 100 ? C.red : `linear-gradient(90deg, ${C.purple}, ${C.accent})`, transition: 'width 0.15s',
+                    }} />
+                    {/* 区画の区切り線 */}
+                    {segs.slice(0, -1).map((_, i) => {
+                      const cum = segs.slice(0, i + 1).reduce((n, x) => n + x.chars, 0);
+                      return (
+                        <div key={i} style={{ position: 'absolute', left: `${cum / total * 100}%`, top: 0, bottom: 0, width: 2, background: C.bg }} />
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', fontSize: 9, color: C.muted, marginTop: 2 }}>
+                    {segs.map((sg, i) => (
+                      <div key={i} style={{ width: `${sg.chars / total * 100}%`, textAlign: 'center' }}>{sg.label}{sg.chars}</div>
+                    ))}
+                  </div>
+                </div>
+
+                <textarea
+                  value={wrText}
+                  onChange={e => setWrText(e.target.value)}
+                  placeholder={wrPhase === 'copy' ? '上の模範解答を書き写す...' : '設問に対する解答を書く...'}
+                  rows={6}
+                  style={{
+                    width: '100%', padding: '14px', borderRadius: 12, background: C.card,
+                    border: `1px solid ${C.border}`, color: C.text, fontSize: 14, lineHeight: 1.9,
+                    resize: 'vertical', boxSizing: 'border-box', outline: 'none', marginBottom: 8,
+                  }}
+                />
+
+                {wrPhase === 'copy' && len > 0 && (
+                  <div style={{ fontSize: 12, color: ratio >= 95 ? C.green : C.muted, textAlign: 'right', marginBottom: 8, fontWeight: ratio >= 95 ? 700 : 400 }}>
+                    一致率 {ratio}%{ratio >= 95 ? '　✓ ほぼ一致' : ''}
+                  </div>
+                )}
+
+                <button
+                  onClick={wrPhase === 'copy' ? finishCopy : gradeRecall}
+                  disabled={len === 0}
+                  style={{
+                    width: '100%', padding: '16px', borderRadius: 12, border: 'none',
+                    background: len === 0 ? C.card : `linear-gradient(135deg, ${C.purple}, ${C.accent})`,
+                    color: len === 0 ? C.muted : '#000', fontWeight: 700,
+                    cursor: len === 0 ? 'default' : 'pointer', fontSize: 16,
+                  }}>
+                  {wrPhase === 'copy' ? '完了' : '採点する'}
+                </button>
+              </div>
+            );
+          }
+
+          // ---- メニュー ----
+          const poolW = PROCESS_PROBLEMS.filter(p => wrCases.includes(p.case));
+          const copiedTotal   = poolW.filter(p => (wProg[p.id]?.copied || 0) > 0).length;
+          const recalledTotal = poolW.filter(p => (wProg[p.id]?.recalled || 0) > 0).length;
+
+          return (
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>✍️ 写経</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+                書き写して型を覚え、記憶だけで書けるようにする
+              </div>
+
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>出題範囲</div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
+                {Object.entries(caseLabelsW).map(([cid, label]) => {
+                  const on = wrCases.includes(cid);
+                  return (
+                    <button key={cid}
+                      onClick={() => setWrCases(cs => on ? (cs.length > 1 ? cs.filter(x => x !== cid) : cs) : [...cs, cid])}
+                      style={{
+                        padding: '7px 14px', borderRadius: 20, border: `1px solid ${on ? caseColorsW[cid] : C.border}`,
+                        background: on ? `${caseColorsW[cid]}22` : 'transparent', color: on ? caseColorsW[cid] : C.muted,
+                        fontWeight: on ? 700 : 400, cursor: 'pointer', fontSize: 12,
+                      }}>{on ? '✓ ' : ''}{label}</button>
+                  );
+                })}
+                <span style={{ fontSize: 11, color: C.muted, alignSelf: 'center', marginLeft: 4 }}>{poolW.length}問</span>
+              </div>
+
+              {[
+                { id: 'copy', icon: '✍️', title: '写し書き', color: C.accent,
+                  desc: '模範解答を見ながら書き写す。字数配分バーで、どの要素に何字使うかを体に入れる',
+                  done: copiedTotal },
+                { id: 'recall', icon: '🧠', title: '記憶で書く', color: C.purple,
+                  desc: '設問だけを見て解答を書く。手が止まったらヒントを3段階まで開ける',
+                  done: recalledTotal },
+              ].map(m => (
+                <button key={m.id} onClick={() => startWriting(m.id)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 10, background: C.card, border: `1px solid ${m.color}44`, borderRadius: 14, padding: '16px', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: m.color }}>{m.icon} {m.title}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{m.done} / {poolW.length}問 実施</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{m.desc}</div>
+                </button>
+              ))}
+
+              <div style={{ fontSize: 12, color: C.muted, margin: '20px 0 8px' }}>問題別の実施状況</div>
+              {poolW.map(p => {
+                const g = wProg[p.id] || {};
+                return (
+                  <div key={p.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, background: C.card, borderRadius: 10,
+                    padding: '10px 12px', marginBottom: 6,
+                    border: `1px solid ${(g.bestCoverage || 0) >= 100 ? C.gold + '44' : C.border}`,
+                  }}>
+                    <span style={{ fontSize: 10, color: caseColorsW[p.case], fontWeight: 700, flexShrink: 0, width: 42 }}>{caseLabelsW[p.case]}</span>
+                    <span style={{ flex: 1, fontSize: 12, color: C.text }}>{p.title}</span>
+                    <span style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>
+                      ✍️{g.copied || 0} 🧠{g.recalled || 0}
+                      {g.bestCoverage != null && <span style={{ color: g.bestCoverage >= 80 ? C.green : C.muted, marginLeft: 6, fontWeight: 700 }}>{g.bestCoverage}%</span>}
                     </span>
                   </div>
                 );
@@ -7874,6 +8245,35 @@ export default function App() {
     setParticles(xp);
   }
 
+  // 写経：実施回数と最高網羅率を更新＋XP付与
+  function handleWritingComplete({ mode, probId, coverage, hintsUsed, xp }) {
+    let d = { ...data };
+    const prog = { ...(d.writingProgress || {}) };
+    const prev = prog[probId] || { copied: 0, recalled: 0, bestCoverage: null };
+    prog[probId] = mode === 'copy'
+      ? { ...prev, copied: prev.copied + 1 }
+      : { ...prev, recalled: prev.recalled + 1, bestCoverage: Math.max(prev.bestCoverage ?? 0, coverage) };
+    d.writingProgress = prog;
+
+    if (!xp || xp <= 0) { commit(d); return; }
+
+    const label = mode === 'copy' ? '写し書き' : '記憶で書く';
+    const prevLevel = getLevel(d.xp);
+    const msg = mode === 'copy' ? '書き写し完了' : `キーワード${coverage}%`;
+    const hi = buildHistoryItem('✍️', `${label} ${msg}`, xp);
+    d = applyXpGain(d, xp, hi);
+    commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
+    setReward({
+      icon: '✍️',
+      title: `${label}完了！`,
+      xp,
+      message: hintsUsed > 0 ? `${msg}・ヒント${hintsUsed}段階` : msg,
+    });
+    setParticles(xp);
+  }
+
   function handleDrillComplete(correctCount) {
     const xp = correctCount * 5;
     if (xp <= 0) return;
@@ -8073,6 +8473,7 @@ export default function App() {
           onSaveEssayHistory={handleSaveEssayHistory}
           onSignalComplete={handleSignalComplete}
           onProcessComplete={handleProcessComplete}
+          onWritingComplete={handleWritingComplete}
           onSaveAiQa={handleSaveAiQa}
           pendingProblem={pendingProblem}
           onClearPending={() => setPendingProblem(null)}
