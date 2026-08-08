@@ -1890,6 +1890,89 @@ const TEXTBOOK_CONTENT = {
   ],
 };
 
+// ============================================================
+// Signal Words（与件文シグナルワード → 解答の方向性）
+// segments / answerIdx は「与件文ハイライト演習」で使用
+// ============================================================
+
+const SIGNAL_WORDS = [
+  // ---- 事例I 組織・人事 ----
+  { id: 'sw_c1_01', case: 'case1', signal: '指示がないと動けない・主体性がない', direction: '権限委譲・ジョブローテーション・自律性の醸成',
+    segments: ['上司の指示がないと自ら動けない社員が目立ち、', 'A社では新規提案の件数が', '年々減少している。'], answerIdx: 0 },
+  { id: 'sw_c1_02', case: 'case1', signal: '口頭伝承・属人化・ミスが多い', direction: 'マニュアル整備・標準化・OJT・属人化解消',
+    segments: ['A社の事務手続きは長年見直されておらず、', '社長も改善の必要を感じているが、', '手順は担当者の口頭伝承に頼り属人化している。'], answerIdx: 2 },
+  { id: 'sw_c1_03', case: 'case1', signal: '評価基準が不透明・不満がある', direction: 'コンピテンシー評価・行動基準の明確化・処遇連動',
+    segments: ['近年の従業員アンケートでは、', '何を評価されているのか分からないという不満', 'が多く寄せられている。'], answerIdx: 1 },
+  { id: 'sw_c1_04', case: 'case1', signal: '縦割り・部門間連携が弱い', direction: '横断的会議体・多職種連携・情報共有の仕組み化',
+    segments: ['A社は事業拡大に伴い部門数を増やしてきたが、', '各部門の業務範囲が固定化した結果、', '部門をまたぐ情報共有がほとんど行われていない。'], answerIdx: 2 },
+  { id: 'sw_c1_05', case: 'case1', signal: '意思決定が遅い・環境変化に対応できない', direction: '事業別組織への再編・分権化・スピード経営',
+    segments: ['すべての案件が社長決裁を要するため判断に時間がかかり、', '市場の変化が加速するなかで', '商機を逃す場面も出てきた。'], answerIdx: 0 },
+  { id: 'sw_c1_06', case: 'case1', signal: '後継者が現場を知らない・不安の声がある', direction: '段階的権限委譲・OJT・ステークホルダー合意形成',
+    segments: ['長男が後継者として入社したが、', '現場経験が乏しく従業員から不安の声が上がっている', 'と社長は認識している。'], answerIdx: 1 },
+  { id: 'sw_c1_07', case: 'case1', signal: 'M&A後・統合がうまくいかない', direction: 'PMI・ビジョン共有・混成チーム・制度統一',
+    segments: ['3年前に同業のB社を買収し規模は拡大したものの、', '社長が期待した相乗効果は限定的で、', '両社の従業員に一体感がなく制度も併存したままである。'], answerIdx: 2 },
+  { id: 'sw_c1_08', case: 'case1', signal: 'シニア・定年者が多い・技術継承が課題', direction: '再雇用制度・暗黙知継承・世代交代のバランス',
+    segments: ['熟練工の多くが数年内に定年を迎えるが技術の引き継ぎが進んでおらず、', 'A社の製造部門では', '将来の品質維持が危ぶまれている。'], answerIdx: 0 },
+  { id: 'sw_c1_09', case: 'case1', signal: '新規事業と既存事業の軋轢', direction: '分社化・両利きの経営・組織文化の並立',
+    segments: ['新規事業部門は挑戦的な風土を求めるが、', '既存事業の管理手法を適用され対立が生じている', 'と担当役員は語る。'], answerIdx: 1 },
+  { id: 'sw_c1_10', case: 'case1', signal: '従業員の研修・表彰を実施した', direction: 'インターナルマーケティング・ES→CS連動',
+    segments: ['A社の離職率は改善しつつある。', 'その背景として社長が挙げるのは、', '昨年から導入した接遇研修と優秀スタッフの表彰制度である。'], answerIdx: 2 },
+
+  // ---- 事例II マーケティング ----
+  { id: 'sw_c2_01', case: 'case2', signal: '新規顧客が少ない・若年層が来ない', direction: 'SNS活用・ストーリー訴求・体験価値・ターゲティング',
+    segments: ['B社の商圏人口は横ばいで推移しているが、', '来店客の構成を分析したところ、', '常連は高齢層が中心で20〜30代の新規来店がほとんどない。'], answerIdx: 2 },
+  { id: 'sw_c2_02', case: 'case2', signal: 'リピートが少ない・定着率が低い', direction: 'サブスク・会員制度・CRM・LTV・ロイヤルティ向上',
+    segments: ['来店客数自体は増えているものの、', '2回目以降の来店につながる顧客が少なく', '売上が安定しない。'], answerIdx: 1 },
+  { id: 'sw_c2_03', case: 'case2', signal: '客単価が低い・購入点数が少ない', direction: 'クロスセル・アップセル・セット販売・POP・声かけ',
+    segments: ['多くの顧客は目当ての1品だけを購入して退店しており、', 'B社の客単価は', '同業平均を下回っている。'], answerIdx: 0 },
+  { id: 'sw_c2_04', case: 'case2', signal: '認知度が低い・伝わっていない', direction: '試飲・体験提供・SNS・地元連携・口コミ・ブランド浸透',
+    segments: ['B社の商品は品評会で高い評価を得ているが、', '売上は伸び悩んでおり、', 'その良さが地域住民にほとんど知られていない。'], answerIdx: 2 },
+  { id: 'sw_c2_05', case: 'case2', signal: '価格競争に巻き込まれている', direction: '高付加価値化・差別化・ストーリー・限定性・希少価値',
+    segments: ['近隣に大型量販店が出店して以降、', '値下げ競争に巻き込まれ利益率が低下している', '状況にある。'], answerIdx: 1 },
+  { id: 'sw_c2_06', case: 'case2', signal: '競合が増えて売上低下', direction: 'ターゲティング・ブランド構築・価格以外の価値訴求',
+    segments: ['商圏内に同業他社が相次いで開業し売上は3年連続で減少しており、', 'B社社長は今後の方向性について', '専門家に相談することにした。'], answerIdx: 0 },
+  { id: 'sw_c2_07', case: 'case2', signal: 'サービス品質にばらつきがある', direction: 'マニュアル化・OJT・評価制度・ES向上・標準化',
+    segments: ['接客に関する顧客アンケートを実施したところ、', '全体の満足度は高かったものの、', '担当するスタッフによって評価が大きく異なることが分かった。'], answerIdx: 2 },
+  { id: 'sw_c2_08', case: 'case2', signal: '販路が限られている・拡大したい', direction: '卸チャネル構築・提携・EC活用・チャネル別差別化',
+    segments: ['B社の販売は', '自社店舗での対面販売のみに限られており', '商圏の拡大が課題である。'], answerIdx: 1 },
+  { id: 'sw_c2_09', case: 'case2', signal: '市場ニーズを把握できていない', direction: 'ヒアリング・POS活用・インサイト・マーケットイン',
+    segments: ['B社の商品開発は社長の勘と経験に頼ってきた。', 'これまでは大きな問題はなかったが、', '顧客が何を求めているかを体系的に把握できていない。'], answerIdx: 2 },
+  { id: 'sw_c2_10', case: 'case2', signal: '6次産業化・農業×加工×販売', direction: '体験型・ストーリー訴求・地域ブランド・コト消費',
+    segments: ['自社農園で収穫した果物を加工品として製造し直営店で販売する体制を整えたB社は、', '今後の販促の方向性を', '検討している。'], answerIdx: 0 },
+  { id: 'sw_c2_11', case: 'case2', signal: '提携・アライアンスの提案がある', direction: '相互補完・Win-Win・販路活用・ニーズ収集・共創',
+    segments: ['先日、地元の宿泊事業者から', '共同で商品を企画したいという提携の申し出があった', 'と社長は語る。'], answerIdx: 1 },
+
+  // ---- 事例III 生産・技術 ----
+  { id: 'sw_c3_01', case: 'case3', signal: '人によって手順が異なる・属人化', direction: '標準化・マニュアル化・OJT・属人化の排除',
+    segments: ['C社の主力工程は熟練者に支えられてきたが、', '近年は品質のばらつきが目立つようになり、', '調査の結果、作業者ごとに手順やコツが異なることが判明した。'], answerIdx: 2 },
+  { id: 'sw_c3_02', case: 'case3', signal: '段取替えが多い・段取時間が長い', direction: '内段取の外段取化・SMED・リードタイム短縮',
+    segments: ['1日に何度も段取替えが発生し機械の停止時間が長いため、', 'C社の設備稼働率は', '同業他社を下回っている。'], answerIdx: 0 },
+  { id: 'sw_c3_03', case: 'case3', signal: '不良・ヒューマンエラーが多い', direction: 'ポカヨケ・作業標準化・チェック機構・OJT',
+    segments: ['検査工程では、', '部品の取り付け忘れによる不良が繰り返し発生しており', '手直し工数が増加している。'], answerIdx: 1 },
+  { id: 'sw_c3_04', case: 'case3', signal: '情報共有が不十分・連携が弱い', direction: 'DRINK・工程管理システム(MES)・見える化',
+    segments: ['C社の受注は近年増加傾向にあるが、', '生産計画の変更が頻発しており、', '営業部門の受注情報が製造部門にリアルタイムで共有されていない。'], answerIdx: 2 },
+  { id: 'sw_c3_05', case: 'case3', signal: '設備トラブル・突発停止が多い', direction: '予防保全・定期点検・TPM・稼働率向上',
+    segments: ['主力設備の突発的な故障による停止が月に数回発生しており、', 'C社では納期遅延が', '常態化しつつある。'], answerIdx: 0 },
+  { id: 'sw_c3_06', case: 'case3', signal: '在庫過剰・資金効率が悪い', direction: '需要予測・生産計画見直し・在庫回転率・JIT',
+    segments: ['見込みで大ロット生産を続けた結果、', '長期滞留する製品在庫が倉庫を圧迫している', 'と工場長は述べる。'], answerIdx: 1 },
+  { id: 'sw_c3_07', case: 'case3', signal: '繁閑差が激しい・人員配置が難しい', direction: '多能工化・平準化・生産計画最適化',
+    segments: ['C社の受注は月末に集中する傾向がある。', 'この結果、人員配置に苦慮しており、', '月初は手待ちが生じ月末は残業が常態化している。'], answerIdx: 2 },
+  { id: 'sw_c3_08', case: 'case3', signal: '品質のばらつき・再発が多い', direction: 'QC活動・原因分析・是正処置・横展開',
+    segments: ['同種のクレームが', '対策を講じた後も別のラインで再発しており', '原因追究が不十分である。'], answerIdx: 1 },
+  { id: 'sw_c3_09', case: 'case3', signal: '外注品質が不安定', direction: '品質監査・基準共有・パートナーシップ',
+    segments: ['協力会社から納入される部品はロットによって寸法精度にばらつきがあり、', 'C社の受入検査工程では', '追加の工数が発生している。'], answerIdx: 0 },
+  { id: 'sw_c3_10', case: 'case3', signal: '多品種少量対応が難しい', direction: 'セル生産・段取短縮・多能工・フレキシビリティ',
+    segments: ['顧客からの小ロット短納期の要請が増えている。', 'C社はこれに応えたいと考えているが、', '大量生産向けのライン構成では柔軟に対応できない。'], answerIdx: 2 },
+];
+
+function getSignalStars(mastery) {
+  const s = mastery?.streak || 0;
+  if (s >= 5) return 3;
+  if (s >= 3) return 2;
+  if (s >= 1) return 1;
+  return 0;
+}
+
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -2234,6 +2317,8 @@ const DEFAULT_DATA = {
   geminiApiKey: '',
   essayHistory: [],
   stampCalendar: {},
+  signalMastery: {},   // { [swId]: { correct, wrong, streak } }
+  signalBest: {},      // { attack: 最高スコア, highlight: 最高スコア }
 };
 
 function loadData() {
@@ -3629,7 +3714,7 @@ function HistoryEssayCard({ item, scoreColor, caseColors, caseProblemMap }) {
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, pendingProblem, onClearPending }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, onSignalComplete, pendingProblem, onClearPending }) {
   const [view, setView]                   = useState('list');
   const [tabMode, setTabMode]             = useState('study');
   const [selectedCase, setSelectedCase]   = useState('case4');
@@ -3669,6 +3754,17 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
   const [essayLoading, setEssayLoading]   = useState(false);
   const [essayApiInput, setEssayApiInput] = useState('');
   const [essayView, setEssayView]         = useState('list'); // 'list' | 'history'
+  // シグナルワード演習
+  const [sigPhase, setSigPhase]           = useState('menu');  // 'menu'|'quiz'|'result'
+  const [sigMode, setSigMode]             = useState('quiz');  // 'quiz'|'attack'|'highlight'
+  const [sigCases, setSigCases]           = useState(['case1','case2','case3']);
+  const [sigQueue, setSigQueue]           = useState([]);
+  const [sigIdx, setSigIdx]               = useState(0);
+  const [sigChoice, setSigChoice]         = useState(null);
+  const [sigScore, setSigScore]           = useState({ correct: 0, total: 0, streak: 0, maxStreak: 0 });
+  const [sigResults, setSigResults]       = useState([]);
+  const [sigTimeLeft, setSigTimeLeft]     = useState(null);
+  const sigTimerRef = useRef(null);
 
   function resetSolver() {
     setCurrentStep(0);
@@ -3882,6 +3978,79 @@ scoreは0〜10の整数。`;
     setDrillShowExp(false);
   }
 
+  // ===== シグナルワード演習 =====
+
+  // 出題キューを生成。quiz/attack は4択、highlight は与件文タップ
+  function buildSignalQueue(mode, cases) {
+    const pool = SIGNAL_WORDS.filter(w => cases.includes(w.case));
+    if (pool.length === 0) return [];
+    const shuffled = shuffleArray(pool);
+    // 即答は10問、タイムアタックとハイライトは時間/全問尽きるまで回すので多めに
+    const count = mode === 'quiz' ? Math.min(10, shuffled.length) : shuffled.length;
+    return shuffled.slice(0, count).map(w => {
+      if (mode === 'highlight') return { word: w, choices: null, correct: w.answerIdx };
+      // 他のシグナルワードの「解答の方向性」から誤答肢を3つ作る
+      const distractors = shuffleArray(pool.filter(x => x.id !== w.id)).slice(0, 3).map(x => x.direction);
+      const choices = shuffleArray([w.direction, ...distractors]);
+      return { word: w, choices, correct: choices.indexOf(w.direction) };
+    });
+  }
+
+  function startSignal(mode) {
+    const queue = buildSignalQueue(mode, sigCases);
+    if (queue.length === 0) return;
+    if (sigTimerRef.current) clearInterval(sigTimerRef.current);
+    setSigMode(mode);
+    setSigQueue(queue);
+    setSigIdx(0);
+    setSigChoice(null);
+    setSigScore({ correct: 0, total: 0, streak: 0, maxStreak: 0 });
+    setSigResults([]);
+    setSigPhase('quiz');
+    if (mode === 'attack') {
+      setSigTimeLeft(60);
+      sigTimerRef.current = setInterval(() => {
+        setSigTimeLeft(t => {
+          if (t <= 1) { clearInterval(sigTimerRef.current); finishSignal(); return 0; }
+          return t - 1;
+        });
+      }, 1000);
+    } else {
+      setSigTimeLeft(null);
+    }
+  }
+
+  function finishSignal() {
+    if (sigTimerRef.current) clearInterval(sigTimerRef.current);
+    setSigPhase('result');
+  }
+
+  function handleSignalAnswer(choiceIdx) {
+    if (sigChoice !== null) return;
+    const item = sigQueue[sigIdx];
+    const ok = choiceIdx === item.correct;
+    const streak = ok ? sigScore.streak + 1 : 0;
+    setSigChoice(choiceIdx);
+    setSigScore(s => ({
+      correct: s.correct + (ok ? 1 : 0),
+      total: s.total + 1,
+      streak,
+      maxStreak: Math.max(s.maxStreak, streak),
+    }));
+    setSigResults(r => [...r, { id: item.word.id, ok }]);
+    // タイムアタックはテンポ重視で自動送り
+    if (sigMode === 'attack') setTimeout(() => nextSignal(), ok ? 450 : 900);
+  }
+
+  function nextSignal() {
+    if (sigIdx + 1 >= sigQueue.length) { finishSignal(); return; }
+    setSigIdx(i => i + 1);
+    setSigChoice(null);
+  }
+
+  // タイマーのクリーンアップ
+  useEffect(() => () => { if (sigTimerRef.current) clearInterval(sigTimerRef.current); }, []);
+
   function startExam() {
     const problems = buildExamProblems(examConfig);
     setExamProblems(problems);
@@ -3972,11 +4141,12 @@ scoreは0〜10の整数。`;
             { id: 'analysis', label: '📊 分析' },
             { id: 'exam', label: '🎯 模擬試験' },
             { id: 'drill', label: '⚡ 即トレ' },
+            { id: 'signal', label: '🚦 シグナル' },
             { id: 'essay', label: '📝 論述' },
           ].map(m => (
             <button
               key={m.id}
-              onClick={() => { setTabMode(m.id); setCardSession(null); setExpandedTopic(null); }}
+              onClick={() => { setTabMode(m.id); setCardSession(null); setExpandedTopic(null); setSigPhase('menu'); }}
               style={{
                 padding: '8px 14px', borderRadius: 20, border: 'none', flexShrink: 0,
                 background: tabMode === m.id ? C.accent : C.card,
@@ -4068,6 +4238,307 @@ scoreは0〜10の整数。`;
                   );
                 })}
               </div>
+            </div>
+          );
+        })()}
+
+        {/* ===== シグナルワード演習 ===== */}
+        {tabMode === 'signal' && (() => {
+          const caseLabelsSig = { case1: '事例I', case2: '事例II', case3: '事例III' };
+          const caseColorsSig = { case1: '#7c3aed', case2: '#0ea5e9', case3: '#f59e0b' };
+          const mastery = data.signalMastery || {};
+          const best = data.signalBest || {};
+
+          // ---- 結果画面 ----
+          if (sigPhase === 'result') {
+            const pct = sigScore.total > 0 ? Math.round(sigScore.correct / sigScore.total * 100) : 0;
+            const modeLabel = sigMode === 'attack' ? '60秒タイムアタック' : sigMode === 'highlight' ? '与件文ハイライト' : 'シグナル即答';
+            const prevBest = best[sigMode] || 0;
+            const isRecord = (sigMode === 'attack' || sigMode === 'highlight') && sigScore.correct > prevBest;
+            const bonus = sigScore.maxStreak >= 5 ? 20 : 0;
+            const gainXp = sigScore.correct * 3 + bonus;
+            const missed = sigResults.filter(r => !r.ok)
+              .map(r => SIGNAL_WORDS.find(w => w.id === r.id)).filter(Boolean);
+
+            return (
+              <div style={{ padding: '16px 0' }}>
+                <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                  <div style={{ fontSize: 44, marginBottom: 8 }}>{isRecord ? '🏆' : pct >= 80 ? '🎉' : '🚦'}</div>
+                  {isRecord && (
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.gold, marginBottom: 6 }}>
+                      自己ベスト更新！（前回 {prevBest}問）
+                    </div>
+                  )}
+                  <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8 }}>{modeLabel} 完了</div>
+                  <div style={{ fontSize: 38, fontWeight: 700, color: C.accent }}>
+                    {sigScore.correct} / {sigScore.total}
+                  </div>
+                  <div style={{ fontSize: 14, color: pct >= 80 ? C.green : pct >= 50 ? '#f59e0b' : C.red, fontWeight: 700, marginBottom: 6 }}>
+                    正解率 {pct}%
+                  </div>
+                  {sigScore.maxStreak >= 2 && (
+                    <div style={{ fontSize: 13, color: C.gold, marginBottom: 4 }}>🔥 最大 {sigScore.maxStreak} 連続</div>
+                  )}
+                  <div style={{ fontSize: 13, color: C.muted }}>
+                    ＋{gainXp} XP{bonus > 0 ? `（連続ボーナス +${bonus}）` : ''}
+                  </div>
+                </div>
+
+                {missed.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 12, color: C.red, fontWeight: 700, marginBottom: 8 }}>
+                      ✗ 間違えたシグナル（{missed.length}件）
+                    </div>
+                    {missed.map(w => (
+                      <div key={w.id} style={{
+                        background: C.card, border: `1px solid ${C.red}33`,
+                        borderRadius: 10, padding: '10px 12px', marginBottom: 6,
+                      }}>
+                        <div style={{ fontSize: 13, color: C.text, fontWeight: 600, marginBottom: 4 }}>{w.signal}</div>
+                        <div style={{ fontSize: 12, color: C.green, lineHeight: 1.5 }}>→ {w.direction}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => { onSignalComplete({ mode: sigMode, correct: sigScore.correct, total: sigScore.total, maxStreak: sigScore.maxStreak, results: sigResults }); startSignal(sigMode); }}
+                    style={{
+                      flex: 1, padding: '14px', borderRadius: 12, border: `1px solid ${C.accent}`,
+                      background: 'transparent', color: C.accent, fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                    }}>🔁 もう一度</button>
+                  <button onClick={() => { onSignalComplete({ mode: sigMode, correct: sigScore.correct, total: sigScore.total, maxStreak: sigScore.maxStreak, results: sigResults }); setSigPhase('menu'); }}
+                    style={{
+                      flex: 1, padding: '14px', borderRadius: 12, border: 'none',
+                      background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                    }}>結果を記録して終了</button>
+                </div>
+              </div>
+            );
+          }
+
+          // ---- 出題中 ----
+          if (sigPhase === 'quiz' && sigQueue.length > 0) {
+            const item = sigQueue[sigIdx];
+            const w = item.word;
+            const answered = sigChoice !== null;
+            const isCorrect = answered && sigChoice === item.correct;
+
+            return (
+              <div>
+                {/* ヘッダー：進捗・連続・残り時間 */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <button onClick={finishSignal}
+                    style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12 }}>終了</button>
+                  {sigMode === 'attack' ? (
+                    <div style={{
+                      fontSize: 22, fontWeight: 700, fontFamily: 'monospace',
+                      color: sigTimeLeft <= 10 ? C.red : sigTimeLeft <= 30 ? C.orange : C.accent,
+                    }}>{sigTimeLeft}s</div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: C.muted }}>{sigIdx + 1} / {sigQueue.length}問</div>
+                  )}
+                  <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, minWidth: 60, textAlign: 'right' }}>
+                    {sigScore.streak >= 2 ? `🔥${sigScore.streak}` : ''}
+                  </div>
+                </div>
+
+                {/* コンボゲージ */}
+                {sigScore.streak >= 1 && (
+                  <div style={{ height: 3, background: C.border, borderRadius: 2, marginBottom: 14, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', width: `${Math.min(sigScore.streak / 5, 1) * 100}%`,
+                      background: `linear-gradient(90deg, ${C.orange}, ${C.gold})`, transition: 'width 0.3s',
+                    }} />
+                  </div>
+                )}
+
+                <div style={{ fontSize: 11, color: caseColorsSig[w.case], fontWeight: 700, marginBottom: 8 }}>
+                  {caseLabelsSig[w.case]}
+                </div>
+
+                {/* --- ハイライト演習：与件文から該当箇所をタップ --- */}
+                {sigMode === 'highlight' ? (
+                  <>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
+                      次の与件文から「課題を示すシグナル」をタップして選べ
+                    </div>
+                    <div style={{
+                      background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+                      padding: '16px 14px', marginBottom: 14, lineHeight: 2.2,
+                    }}>
+                      {w.segments.map((seg, i) => {
+                        let bg = 'transparent', color = C.text, border = 'transparent';
+                        if (answered) {
+                          if (i === item.correct) { bg = `${C.green}25`; color = C.green; border = C.green; }
+                          else if (i === sigChoice) { bg = `${C.red}25`; color = C.red; border = C.red; }
+                          else { color = C.muted; }
+                        }
+                        return (
+                          <span key={i} onClick={() => handleSignalAnswer(i)}
+                            style={{
+                              background: bg, color, borderBottom: `2px solid ${border}`,
+                              padding: '3px 2px', borderRadius: 4,
+                              cursor: answered ? 'default' : 'pointer', fontSize: 14,
+                              transition: 'all 0.2s',
+                            }}>{seg}</span>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* --- 即答／タイムアタック：シグナル→方向性の4択 --- */}
+                    <div style={{
+                      background: `linear-gradient(135deg, ${C.card}, #0d1a2e)`,
+                      border: `1px solid ${caseColorsSig[w.case]}44`,
+                      borderRadius: 14, padding: '20px 16px', marginBottom: 14, textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>与件文のシグナル</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.text, lineHeight: 1.6 }}>{w.signal}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>解答の方向性は？</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                      {item.choices.map((choice, idx) => {
+                        let bg = C.card, border = C.border, color = C.text;
+                        if (answered) {
+                          if (idx === item.correct) { bg = `${C.green}22`; border = C.green; color = C.green; }
+                          else if (idx === sigChoice) { bg = `${C.red}22`; border = C.red; color = C.red; }
+                          else { color = C.muted; }
+                        }
+                        return (
+                          <button key={idx} onClick={() => handleSignalAnswer(idx)} disabled={answered}
+                            style={{
+                              background: bg, border: `1px solid ${border}`, borderRadius: 10,
+                              padding: '13px 14px', color, textAlign: 'left',
+                              cursor: answered ? 'default' : 'pointer', fontSize: 13, lineHeight: 1.5,
+                              fontWeight: answered && idx === item.correct ? 700 : 400,
+                              transition: 'all 0.2s',
+                            }}>{choice}</button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* 正誤フィードバック（タイムアタックは自動送りなので簡略表示） */}
+                {answered && sigMode !== 'attack' && (
+                  <>
+                    <div style={{
+                      background: isCorrect ? `${C.green}11` : `${C.red}11`,
+                      border: `1px solid ${isCorrect ? C.green : C.red}44`,
+                      borderRadius: 10, padding: 12, marginBottom: 12,
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: isCorrect ? C.green : C.red, marginBottom: 6 }}>
+                        {isCorrect ? '✓ 正解' : '✗ 不正解'}
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, marginBottom: 3 }}>{w.signal}</div>
+                      <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>→ {w.direction}</div>
+                    </div>
+                    <button onClick={nextSignal} style={{
+                      width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+                      background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 15,
+                    }}>{sigIdx + 1 >= sigQueue.length ? '結果を見る' : '次へ →'}</button>
+                  </>
+                )}
+                {answered && sigMode === 'attack' && (
+                  <div style={{ textAlign: 'center', fontSize: 14, fontWeight: 700, color: isCorrect ? C.green : C.red }}>
+                    {isCorrect ? '✓ 正解！' : `✗ 正解： ${w.direction}`}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          // ---- メニュー ----
+          const poolSize = SIGNAL_WORDS.filter(x => sigCases.includes(x.case)).length;
+          const masteredCount = SIGNAL_WORDS.filter(x => getSignalStars(mastery[x.id]) >= 3).length;
+
+          return (
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>🚦 シグナルワード演習</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+                与件文の表現 → 解答の方向性を反射で出せるようにする
+              </div>
+
+              {/* マスター進捗 */}
+              <div style={{
+                background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 16,
+                border: `1px solid ${C.border}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: C.muted }}>マスター済み（★★★）</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>
+                    {masteredCount} / {SIGNAL_WORDS.length}
+                  </span>
+                </div>
+                <div style={{ height: 6, background: C.bg, borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', width: `${(masteredCount / SIGNAL_WORDS.length) * 100}%`,
+                    background: `linear-gradient(90deg, ${C.orange}, ${C.gold})`, transition: 'width 0.4s',
+                  }} />
+                </div>
+              </div>
+
+              {/* 事例フィルタ */}
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>出題範囲</div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+                {Object.entries(caseLabelsSig).map(([cid, label]) => {
+                  const on = sigCases.includes(cid);
+                  return (
+                    <button key={cid}
+                      onClick={() => setSigCases(cs => on ? (cs.length > 1 ? cs.filter(x => x !== cid) : cs) : [...cs, cid])}
+                      style={{
+                        padding: '7px 14px', borderRadius: 20, border: `1px solid ${on ? caseColorsSig[cid] : C.border}`,
+                        background: on ? `${caseColorsSig[cid]}22` : 'transparent',
+                        color: on ? caseColorsSig[cid] : C.muted,
+                        fontWeight: on ? 700 : 400, cursor: 'pointer', fontSize: 12,
+                      }}>{on ? '✓ ' : ''}{label}</button>
+                  );
+                })}
+                <span style={{ fontSize: 11, color: C.muted, alignSelf: 'center', marginLeft: 4 }}>{poolSize}語</span>
+              </div>
+
+              {/* モード選択 */}
+              {[
+                { id: 'quiz', icon: '⚡', title: 'シグナル即答', desc: 'シグナルを見て解答の方向性を4択で選ぶ（10問）', color: C.accent },
+                { id: 'attack', icon: '⏱', title: '60秒タイムアタック', desc: '制限時間内に何問正解できるか。自己ベスト更新を狙う', color: C.orange },
+                { id: 'highlight', icon: '🔍', title: '与件文ハイライト演習', desc: '与件文からシグナル箇所を見つけてタップ。本試験に最も近い', color: C.purple },
+              ].map(m => (
+                <button key={m.id} onClick={() => startSignal(m.id)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left', marginBottom: 10,
+                    background: C.card, border: `1px solid ${m.color}44`, borderRadius: 14,
+                    padding: '16px', cursor: 'pointer',
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: m.color }}>{m.icon} {m.title}</div>
+                    {best[m.id] > 0 && (
+                      <div style={{ fontSize: 11, color: C.gold, fontWeight: 700 }}>🏆 最高 {best[m.id]}問</div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{m.desc}</div>
+                </button>
+              ))}
+
+              {/* 習熟度一覧 */}
+              <div style={{ fontSize: 12, color: C.muted, margin: '20px 0 8px' }}>習熟度一覧</div>
+              {SIGNAL_WORDS.filter(w => sigCases.includes(w.case)).map(w => {
+                const stars = getSignalStars(mastery[w.id]);
+                return (
+                  <div key={w.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    background: C.card, borderRadius: 10, padding: '10px 12px', marginBottom: 6,
+                    border: `1px solid ${stars >= 3 ? C.gold + '44' : C.border}`,
+                  }}>
+                    <span style={{ fontSize: 10, color: caseColorsSig[w.case], fontWeight: 700, flexShrink: 0, width: 42 }}>
+                      {caseLabelsSig[w.case]}
+                    </span>
+                    <span style={{ flex: 1, fontSize: 12, color: C.text, lineHeight: 1.4 }}>{w.signal}</span>
+                    <StarRating mastery={stars} size={12} />
+                  </div>
+                );
+              })}
             </div>
           );
         })()}
@@ -5540,6 +6011,49 @@ export default function App() {
     commit(d);
   }
 
+  // シグナルワード演習：マスタリー更新＋ベストスコア更新＋XP付与
+  function handleSignalComplete({ mode, correct, total, maxStreak, results }) {
+    let d = { ...data };
+
+    // 1問ごとのマスタリー（連続正解でstreakが伸び、間違えると0に戻る）
+    const mastery = { ...(d.signalMastery || {}) };
+    (results || []).forEach(r => {
+      const prev = mastery[r.id] || { correct: 0, wrong: 0, streak: 0 };
+      mastery[r.id] = r.ok
+        ? { correct: prev.correct + 1, wrong: prev.wrong, streak: prev.streak + 1 }
+        : { correct: prev.correct, wrong: prev.wrong + 1, streak: 0 };
+    });
+    d.signalMastery = mastery;
+
+    // ベストスコア更新
+    const best = { ...(d.signalBest || {}) };
+    let newRecord = false;
+    if (mode === 'attack' || mode === 'highlight') {
+      if (correct > (best[mode] || 0)) { best[mode] = correct; newRecord = true; }
+      d.signalBest = best;
+    }
+
+    // XP：1正解3XP＋最大連続ボーナス（連続5以上で+20XP）
+    const bonus = maxStreak >= 5 ? 20 : 0;
+    const xp = correct * 3 + bonus;
+    if (xp <= 0) { commit(d); return; }
+
+    const modeLabel = mode === 'attack' ? '60秒タイムアタック' : mode === 'highlight' ? 'ハイライト演習' : 'シグナル即答';
+    const prevLevel = getLevel(d.xp);
+    const hi = buildHistoryItem('🚦', `${modeLabel} ${correct}/${total}`, xp);
+    d = applyXpGain(d, xp, hi);
+    commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
+    setReward({
+      icon: newRecord ? '🏆' : '🚦',
+      title: newRecord ? `自己ベスト更新！ ${modeLabel}` : `${modeLabel}完了！`,
+      xp,
+      message: bonus > 0 ? `${correct}/${total}正解・${maxStreak}連続ボーナス！` : `${correct}/${total}正解`,
+    });
+    setParticles(xp);
+  }
+
   function handleDrillComplete(correctCount) {
     const xp = correctCount * 5;
     if (xp <= 0) return;
@@ -5731,6 +6245,7 @@ export default function App() {
           onEssayComplete={handleEssayComplete}
           onSaveApiKey={handleSaveApiKey}
           onSaveEssayHistory={handleSaveEssayHistory}
+          onSignalComplete={handleSignalComplete}
           pendingProblem={pendingProblem}
           onClearPending={() => setPendingProblem(null)}
         />
