@@ -1899,7 +1899,7 @@ const SIGNAL_WORDS = [
   // ---- 事例I 組織・人事 ----
   { id: 'sw_c1_01', case: 'case1', signal: '指示がないと動けない・主体性がない', direction: '権限委譲・ジョブローテーション・自律性の醸成',
     segments: ['上司の指示がないと自ら動けない社員が目立ち、', 'A社では新規提案の件数が', '年々減少している。'], answerIdx: 0 },
-  { id: 'sw_c1_02', case: 'case1', signal: '口頭伝承・属人化・ミスが多い', direction: 'マニュアル整備・標準化・OJT・属人化解消',
+  { id: 'sw_c1_02', case: 'case1', signal: '口頭伝承・属人化・ミスが多い', direction: 'マニュアル整備・標準化・OJT・属人化の解消',
     segments: ['A社の事務手続きは長年見直されておらず、', '社長も改善の必要を感じているが、', '手順は担当者の口頭伝承に頼り属人化している。'], answerIdx: 2 },
   { id: 'sw_c1_03', case: 'case1', signal: '評価基準が不透明・不満がある', direction: 'コンピテンシー評価・行動基準の明確化・処遇連動',
     segments: ['近年の従業員アンケートでは、', '何を評価されているのか分からないという不満', 'が多く寄せられている。'], answerIdx: 1 },
@@ -1919,31 +1919,31 @@ const SIGNAL_WORDS = [
     segments: ['A社の離職率は改善しつつある。', 'その背景として社長が挙げるのは、', '昨年から導入した接遇研修と優秀スタッフの表彰制度である。'], answerIdx: 2 },
 
   // ---- 事例II マーケティング ----
-  { id: 'sw_c2_01', case: 'case2', signal: '新規顧客が少ない・若年層が来ない', direction: 'SNS活用・ストーリー訴求・体験価値・ターゲティング',
+  { id: 'sw_c2_01', case: 'case2', signal: '新規顧客が少ない・若年層が来ない', direction: 'SNS活用・ストーリー訴求・体験価値の提供・ターゲティング',
     segments: ['B社の商圏人口は横ばいで推移しているが、', '来店客の構成を分析したところ、', '常連は高齢層が中心で20〜30代の新規来店がほとんどない。'], answerIdx: 2 },
   { id: 'sw_c2_02', case: 'case2', signal: 'リピートが少ない・定着率が低い', direction: 'サブスク・会員制度・CRM・LTV・ロイヤルティ向上',
     segments: ['来店客数自体は増えているものの、', '2回目以降の来店につながる顧客が少なく', '売上が安定しない。'], answerIdx: 1 },
   { id: 'sw_c2_03', case: 'case2', signal: '客単価が低い・購入点数が少ない', direction: 'クロスセル・アップセル・セット販売・POP・声かけ',
     segments: ['多くの顧客は目当ての1品だけを購入して退店しており、', 'B社の客単価は', '同業平均を下回っている。'], answerIdx: 0 },
-  { id: 'sw_c2_04', case: 'case2', signal: '認知度が低い・伝わっていない', direction: '試飲・体験提供・SNS・地元連携・口コミ・ブランド浸透',
+  { id: 'sw_c2_04', case: 'case2', signal: '認知度が低い・伝わっていない', direction: '試飲・体験価値の提供・SNS活用・地元連携・口コミ・ブランド浸透',
     segments: ['B社の商品は品評会で高い評価を得ているが、', '売上は伸び悩んでおり、', 'その良さが地域住民にほとんど知られていない。'], answerIdx: 2 },
-  { id: 'sw_c2_05', case: 'case2', signal: '価格競争に巻き込まれている', direction: '高付加価値化・差別化・ストーリー・限定性・希少価値',
+  { id: 'sw_c2_05', case: 'case2', signal: '価格競争に巻き込まれている', direction: '高付加価値化・差別化・ストーリー訴求・限定性・希少価値',
     segments: ['近隣に大型量販店が出店して以降、', '値下げ競争に巻き込まれ利益率が低下している', '状況にある。'], answerIdx: 1 },
   { id: 'sw_c2_06', case: 'case2', signal: '競合が増えて売上低下', direction: 'ターゲティング・ブランド構築・価格以外の価値訴求',
     segments: ['商圏内に同業他社が相次いで開業し売上は3年連続で減少しており、', 'B社社長は今後の方向性について', '専門家に相談することにした。'], answerIdx: 0 },
-  { id: 'sw_c2_07', case: 'case2', signal: 'サービス品質にばらつきがある', direction: 'マニュアル化・OJT・評価制度・ES向上・標準化',
+  { id: 'sw_c2_07', case: 'case2', signal: 'サービス品質にばらつきがある', direction: 'マニュアル整備・OJT・評価制度・ES向上・標準化',
     segments: ['接客に関する顧客アンケートを実施したところ、', '全体の満足度は高かったものの、', '担当するスタッフによって評価が大きく異なることが分かった。'], answerIdx: 2 },
   { id: 'sw_c2_08', case: 'case2', signal: '販路が限られている・拡大したい', direction: '卸チャネル構築・提携・EC活用・チャネル別差別化',
     segments: ['B社の販売は', '自社店舗での対面販売のみに限られており', '商圏の拡大が課題である。'], answerIdx: 1 },
   { id: 'sw_c2_09', case: 'case2', signal: '市場ニーズを把握できていない', direction: 'ヒアリング・POS活用・インサイト・マーケットイン',
     segments: ['B社の商品開発は社長の勘と経験に頼ってきた。', 'これまでは大きな問題はなかったが、', '顧客が何を求めているかを体系的に把握できていない。'], answerIdx: 2 },
-  { id: 'sw_c2_10', case: 'case2', signal: '6次産業化・農業×加工×販売', direction: '体験型・ストーリー訴求・地域ブランド・コト消費',
+  { id: 'sw_c2_10', case: 'case2', signal: '6次産業化・農業×加工×販売', direction: '体験価値の提供・ストーリー訴求・地域ブランド・コト消費',
     segments: ['自社農園で収穫した果物を加工品として製造し直営店で販売する体制を整えたB社は、', '今後の販促の方向性を', '検討している。'], answerIdx: 0 },
   { id: 'sw_c2_11', case: 'case2', signal: '提携・アライアンスの提案がある', direction: '相互補完・Win-Win・販路活用・ニーズ収集・共創',
     segments: ['先日、地元の宿泊事業者から', '共同で商品を企画したいという提携の申し出があった', 'と社長は語る。'], answerIdx: 1 },
 
   // ---- 事例III 生産・技術 ----
-  { id: 'sw_c3_01', case: 'case3', signal: '人によって手順が異なる・属人化', direction: '標準化・マニュアル化・OJT・属人化の排除',
+  { id: 'sw_c3_01', case: 'case3', signal: '人によって手順が異なる・属人化', direction: '標準化・マニュアル整備・OJT・属人化の解消',
     segments: ['C社の主力工程は熟練者に支えられてきたが、', '近年は品質のばらつきが目立つようになり、', '調査の結果、作業者ごとに手順やコツが異なることが判明した。'], answerIdx: 2 },
   { id: 'sw_c3_02', case: 'case3', signal: '段取替えが多い・段取時間が長い', direction: '内段取の外段取化・SMED・リードタイム短縮',
     segments: ['1日に何度も段取替えが発生し機械の停止時間が長いため、', 'C社の設備稼働率は', '同業他社を下回っている。'], answerIdx: 0 },
@@ -1961,9 +1961,27 @@ const SIGNAL_WORDS = [
     segments: ['同種のクレームが', '対策を講じた後も別のラインで再発しており', '原因追究が不十分である。'], answerIdx: 1 },
   { id: 'sw_c3_09', case: 'case3', signal: '外注品質が不安定', direction: '品質監査・基準共有・パートナーシップ',
     segments: ['協力会社から納入される部品はロットによって寸法精度にばらつきがあり、', 'C社の受入検査工程では', '追加の工数が発生している。'], answerIdx: 0 },
-  { id: 'sw_c3_10', case: 'case3', signal: '多品種少量対応が難しい', direction: 'セル生産・段取短縮・多能工・フレキシビリティ',
+  { id: 'sw_c3_10', case: 'case3', signal: '多品種少量対応が難しい', direction: 'セル生産・段取短縮・多能工化・フレキシビリティ',
     segments: ['顧客からの小ロット短納期の要請が増えている。', 'C社はこれに応えたいと考えているが、', '大量生産向けのライン構成では柔軟に対応できない。'], answerIdx: 2 },
 ];
+
+// 表記統一しきれない近い意味の語をグループ化する。
+// 誤答肢を選ぶとき、正解と同じグループの語は除外して「実質同じなのに不正解」を防ぐ。
+const SIGNAL_KW_GROUPS = [
+  ['標準化', '作業標準化', 'マニュアル整備'],
+  ['権限委譲', '段階的権限委譲', '分権化'],
+  ['差別化', 'チャネル別差別化', '高付加価値化'],
+  ['段取短縮', 'SMED', '内段取の外段取化', 'リードタイム短縮'],
+  ['体験価値の提供', 'コト消費', '体験型サービス'],
+  ['口コミ', 'ブランド浸透', 'ブランド構築'],
+];
+
+// 語 → 同義グループのキー（グループに属さない語は語そのものがキー）
+const SIGNAL_KW_KEY = (() => {
+  const m = {};
+  SIGNAL_KW_GROUPS.forEach((g, i) => g.forEach(w => { m[w] = 'g' + i; }));
+  return w => m[w] || w;
+})();
 
 function getSignalStars(mastery) {
   const s = mastery?.streak || 0;
@@ -4745,6 +4763,7 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
   const [sigScore, setSigScore]           = useState({ correct: 0, total: 0, streak: 0, maxStreak: 0 });
   const [sigResults, setSigResults]       = useState([]);
   const [sigTimeLeft, setSigTimeLeft]     = useState(null);
+  const [sigKwPick, setSigKwPick]         = useState([]);   // 即答：選択中のキーワード
   const sigTimerRef = useRef(null);
   // プロセス演習
   const [procPhase, setProcPhase]         = useState('menu');   // 'menu'|'running'|'result'
@@ -4983,10 +5002,29 @@ scoreは0〜10の整数。`;
     const shuffled = shuffleArray(pool);
     // 即答は10問、タイムアタックとハイライトは時間/全問尽きるまで回すので多めに
     const count = mode === 'quiz' ? Math.min(10, shuffled.length) : shuffled.length;
+
+    // 全シグナルの解答キーワードを語単位で集めておく（即答の誤答肢の母集団）
+    const allKw = [...new Set(SIGNAL_WORDS.flatMap(x => x.direction.split('・')))];
+
     return shuffled.slice(0, count).map(w => {
       if (mode === 'highlight') return { word: w, choices: null, correct: w.answerIdx };
-      // 他のシグナルワードの「解答の方向性」から誤答肢を3つ作る
-      const distractors = shuffleArray(pool.filter(x => x.id !== w.id)).slice(0, 3).map(x => x.direction);
+
+      if (mode === 'quiz') {
+        // 即答＝キーワード群から関連する語をすべて選ぶ形式
+        const kwAnswer = w.direction.split('・');
+        // 正解語と同義グループの語は誤答にしない（実質同じなのに不正解を防ぐ）
+        const banned = new Set(kwAnswer.map(SIGNAL_KW_KEY));
+        const distractors = shuffleArray(allKw.filter(k => !banned.has(SIGNAL_KW_KEY(k))))
+          .slice(0, Math.max(4, 9 - kwAnswer.length));
+        return { word: w, choices: null, kwAnswer, kwPool: shuffleArray([...kwAnswer, ...distractors]) };
+      }
+
+      // タイムアタックは4択のまま。ただし正解と語が2つ以上かぶる方向性は誤答にしない
+      const ansKeys = new Set(w.direction.split('・').map(SIGNAL_KW_KEY));
+      const overlap = x => x.direction.split('・').filter(k => ansKeys.has(SIGNAL_KW_KEY(k))).length;
+      let cands = pool.filter(x => x.id !== w.id && overlap(x) < 2);
+      if (cands.length < 3) cands = SIGNAL_WORDS.filter(x => x.id !== w.id && overlap(x) < 2);
+      const distractors = shuffleArray(cands).slice(0, 3).map(x => x.direction);
       const choices = shuffleArray([w.direction, ...distractors]);
       return { word: w, choices, correct: choices.indexOf(w.direction) };
     });
@@ -5000,6 +5038,7 @@ scoreは0〜10の整数。`;
     setSigQueue(queue);
     setSigIdx(0);
     setSigChoice(null);
+    setSigKwPick([]);
     setSigScore({ correct: 0, total: 0, streak: 0, maxStreak: 0 });
     setSigResults([]);
     setSigPhase('quiz');
@@ -5021,12 +5060,9 @@ scoreは0〜10の整数。`;
     setSigPhase('result');
   }
 
-  function handleSignalAnswer(choiceIdx) {
-    if (sigChoice !== null) return;
-    const item = sigQueue[sigIdx];
-    const ok = choiceIdx === item.correct;
+  // 採点結果をスコアに反映する（即答・タイムアタック・ハイライト共通）
+  function recordSignalResult(item, ok) {
     const streak = ok ? sigScore.streak + 1 : 0;
-    setSigChoice(choiceIdx);
     setSigScore(s => ({
       correct: s.correct + (ok ? 1 : 0),
       total: s.total + 1,
@@ -5034,14 +5070,34 @@ scoreは0〜10の整数。`;
       maxStreak: Math.max(s.maxStreak, streak),
     }));
     setSigResults(r => [...r, { id: item.word.id, ok }]);
+  }
+
+  function handleSignalAnswer(choiceIdx) {
+    if (sigChoice !== null) return;
+    const item = sigQueue[sigIdx];
+    const ok = choiceIdx === item.correct;
+    setSigChoice(choiceIdx);
+    recordSignalResult(item, ok);
     // タイムアタックはテンポ重視で自動送り
     if (sigMode === 'attack') setTimeout(() => nextSignal(), ok ? 450 : 900);
+  }
+
+  // 即答：選んだキーワード集合が正解と完全一致で正解
+  function submitSignalKeywords() {
+    if (sigChoice !== null) return;
+    const item = sigQueue[sigIdx];
+    const a = [...sigKwPick].sort();
+    const b = [...item.kwAnswer].sort();
+    const ok = a.length === b.length && a.every((x, i) => x === b[i]);
+    setSigChoice(ok ? 1 : 0);   // 回答済みフラグ代わり
+    recordSignalResult(item, ok);
   }
 
   function nextSignal() {
     if (sigIdx + 1 >= sigQueue.length) { finishSignal(); return; }
     setSigIdx(i => i + 1);
     setSigChoice(null);
+    setSigKwPick([]);
   }
 
   // タイマーのクリーンアップ
@@ -5426,7 +5482,8 @@ scoreは0〜10の整数。`;
             const item = sigQueue[sigIdx];
             const w = item.word;
             const answered = sigChoice !== null;
-            const isCorrect = answered && sigChoice === item.correct;
+            // 即答はキーワード集合の一致で判定済み（sigChoice に 1/0 を格納）
+            const isCorrect = answered && (sigMode === 'quiz' ? sigChoice === 1 : sigChoice === item.correct);
 
             return (
               <div>
@@ -5501,27 +5558,71 @@ scoreは0〜10の整数。`;
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>与件文のシグナル</div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: C.text, lineHeight: 1.6 }}>{w.signal}</div>
                     </div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>解答の方向性は？</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-                      {item.choices.map((choice, idx) => {
-                        let bg = C.card, border = C.border, color = C.text;
-                        if (answered) {
-                          if (idx === item.correct) { bg = `${C.green}22`; border = C.green; color = C.green; }
-                          else if (idx === sigChoice) { bg = `${C.red}22`; border = C.red; color = C.red; }
-                          else { color = C.muted; }
-                        }
-                        return (
-                          <button key={idx} onClick={() => handleSignalAnswer(idx)} disabled={answered}
+                    {sigMode === 'quiz' ? (
+                      <>
+                        {/* 即答：関連するキーワードをすべて選ぶ */}
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>
+                          解答に使うキーワードをすべて選べ（{item.kwAnswer.length}個）
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                          {item.kwPool.map(kw => {
+                            const sel = sigKwPick.includes(kw);
+                            const isAns = item.kwAnswer.includes(kw);
+                            let bg = C.card, bd = C.border, color = C.text;
+                            if (answered) {
+                              if (isAns) { bg = `${C.green}22`; bd = C.green; color = C.green; }
+                              else if (sel) { bg = `${C.red}22`; bd = C.red; color = C.red; }
+                              else color = C.muted;
+                            } else if (sel) { bg = `${C.accent}22`; bd = C.accent; color = C.accent; }
+                            return (
+                              <button key={kw} disabled={answered}
+                                onClick={() => setSigKwPick(cur =>
+                                  cur.includes(kw) ? cur.filter(x => x !== kw) : [...cur, kw])}
+                                style={{
+                                  background: bg, border: `1px solid ${bd}`, color, borderRadius: 20,
+                                  padding: '8px 14px', fontSize: 13, cursor: answered ? 'default' : 'pointer',
+                                  fontWeight: sel || (answered && isAns) ? 700 : 400, transition: 'all 0.15s',
+                                }}>{kw}</button>
+                            );
+                          })}
+                        </div>
+                        {!answered && (
+                          <button onClick={submitSignalKeywords} disabled={sigKwPick.length === 0}
                             style={{
-                              background: bg, border: `1px solid ${border}`, borderRadius: 10,
-                              padding: '13px 14px', color, textAlign: 'left',
-                              cursor: answered ? 'default' : 'pointer', fontSize: 13, lineHeight: 1.5,
-                              fontWeight: answered && idx === item.correct ? 700 : 400,
-                              transition: 'all 0.2s',
-                            }}>{choice}</button>
-                        );
-                      })}
-                    </div>
+                              width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+                              background: sigKwPick.length > 0 ? C.accent : C.card,
+                              color: sigKwPick.length > 0 ? '#000' : C.muted,
+                              fontWeight: 700, cursor: sigKwPick.length > 0 ? 'pointer' : 'default',
+                              fontSize: 15, marginBottom: 12,
+                            }}>決定（{sigKwPick.length}個選択中）</button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {/* タイムアタック：方向性の4択 */}
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>解答の方向性は？</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                          {item.choices.map((choice, idx) => {
+                            let bg = C.card, border = C.border, color = C.text;
+                            if (answered) {
+                              if (idx === item.correct) { bg = `${C.green}22`; border = C.green; color = C.green; }
+                              else if (idx === sigChoice) { bg = `${C.red}22`; border = C.red; color = C.red; }
+                              else { color = C.muted; }
+                            }
+                            return (
+                              <button key={idx} onClick={() => handleSignalAnswer(idx)} disabled={answered}
+                                style={{
+                                  background: bg, border: `1px solid ${border}`, borderRadius: 10,
+                                  padding: '13px 14px', color, textAlign: 'left',
+                                  cursor: answered ? 'default' : 'pointer', fontSize: 13, lineHeight: 1.5,
+                                  fontWeight: answered && idx === item.correct ? 700 : 400,
+                                  transition: 'all 0.2s',
+                                }}>{choice}</button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -5546,7 +5647,10 @@ scoreは0〜10の整数。`;
                         refId: w.id,
                         wasCorrect: isCorrect,
                         questionText: `与件文シグナル: ${w.signal}`,
-                        myAnswer: item.choices ? item.choices[sigChoice] : (w.segments?.[sigChoice] ?? ''),
+                        myAnswer:
+                          sigMode === 'quiz' ? sigKwPick.join('・')
+                          : item.choices ? item.choices[sigChoice]
+                          : (w.segments?.[sigChoice] ?? ''),
                         correctAnswer: w.direction,
                         explanation: '',
                       })}
@@ -5622,7 +5726,7 @@ scoreは0〜10の整数。`;
 
               {/* モード選択 */}
               {[
-                { id: 'quiz', icon: '⚡', title: 'シグナル即答', desc: 'シグナルを見て解答の方向性を4択で選ぶ（10問）', color: C.accent },
+                { id: 'quiz', icon: '⚡', title: 'シグナル即答', desc: 'シグナルを見て、解答に使うキーワードをすべて選ぶ（10問）', color: C.accent },
                 { id: 'attack', icon: '⏱', title: '60秒タイムアタック', desc: '制限時間内に何問正解できるか。自己ベスト更新を狙う', color: C.orange },
                 { id: 'highlight', icon: '🔍', title: '与件文ハイライト演習', desc: '与件文からシグナル箇所を見つけてタップ。本試験に最も近い', color: C.purple },
               ].map(m => (
