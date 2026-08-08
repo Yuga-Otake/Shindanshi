@@ -1979,15 +1979,117 @@ function getSignalStars(mastery) {
 // ============================================================
 
 const PROC_SESSION_SIZE = 8;  // プロセス演習 1セッションの出題数
+const PROC_STEP_COUNT   = 5;  // 1問あたりの思考ステップ数
 
 const ANSWER_PATTERNS = [
-  { id: 'sesaku',  label: '施策＋効果',           cue: '助言せよ／提案せよ' },
-  { id: 'kadai',   label: '課題＋対応策',         cue: '課題を述べよ' },
-  { id: 'riyu',    label: '理由＋根拠',           cue: '理由を述べよ／なぜか' },
-  { id: 'tokucho', label: '特徴＋差別化要因',     cue: '特徴を述べよ' },
-  { id: 'merit',   label: 'メリット＋デメリット', cue: '両面から述べよ' },
-  { id: 'ryuii',   label: '留意点＋その理由',     cue: '留意点を述べよ' },
+  { id: 'sesaku',  label: '施策＋効果',           cue: '助言せよ／提案せよ',
+    form: '施策は①〜、②〜。効果は〜。',           charPlan: '①35字＋②35字＋効果30字' },
+  { id: 'kadai',   label: '課題＋対応策',         cue: '課題を述べよ',
+    form: '課題は〜。対応策は①〜、②〜。',         charPlan: '課題30字＋①35字＋②35字' },
+  { id: 'riyu',    label: '理由＋根拠',           cue: '理由を述べよ／なぜか',
+    form: '理由は①〜。②〜。',                     charPlan: '①50字＋②50字' },
+  { id: 'tokucho', label: '特徴＋差別化要因',     cue: '特徴を述べよ',
+    form: '特徴は①〜、②〜。これにより〜。',       charPlan: '①35字＋②35字＋結び30字' },
+  { id: 'merit',   label: 'メリット＋デメリット', cue: '両面から述べよ',
+    form: 'メリットは①〜、②〜。デメリットは〜。', charPlan: 'メリット60字＋デメリット40字' },
+  { id: 'ryuii',   label: '留意点＋その理由',     cue: '留意点を述べよ',
+    form: '留意点は①〜。②〜。',                   charPlan: '①50字＋②50字' },
 ];
+
+// キーワードの守備範囲。Step3「使い分け」の出題に使う。
+// 説明は「〜場面」で統一し、長さでは正解が分からないようにしている。
+const KEYWORD_USAGE = {
+  // 組織・人事
+  '権限委譲':               '現場の判断が遅く主体性も育っていない場面',
+  '自律性の醸成':           '指示待ちの社員に自ら動く力を付けたい場面',
+  'ジョブローテーション':   '担当が固定化し視野が狭くなっている場面',
+  'コンピテンシー評価':     '評価基準が曖昧で従業員に不満がある場面',
+  '行動基準の明確化':       '何を評価されるのか社員に伝わっていない場面',
+  '処遇への連動':           '評価結果が報酬や昇進に結び付いていない場面',
+  '成果主義の導入':         '年功序列で若手の意欲が下がっている場面',
+  '賃金水準の引上げ':       '金銭面の不満が離職の理由になっている場面',
+  '希望退職の募集':         '事業縮小で人員規模を抑える必要がある場面',
+  '事業部制組織':           '多角化が進み事業ごとの損益責任を持たせる場面',
+  '分社化':                 '新旧事業で求める組織文化が衝突している場面',
+  '両利きの経営':           '既存事業の深化と新規の探索を両立させる場面',
+  '組織文化の並立':         '性格の違う事業を同じ社内で併存させる場面',
+  '経営資源の分散':         '手を広げすぎて人と資金が薄まる懸念がある場面',
+  'M&Aの実施':              '自社にない技術や販路を短期間で獲得する場面',
+  'PMI':                    '買収後に制度や文化を統合していく場面',
+  'ビジョンの共有':         '統合後の従業員に一体感が生まれていない場面',
+  '混成チームの編成':       '出身企業の壁を越えて協働の実績を作る場面',
+  '事業承継':               '後継者への引き継ぎを計画的に進める場面',
+  '再雇用制度':             '定年を迎える熟練者の雇用を延長したい場面',
+  '暗黙知の継承':           '言語化しにくい勘やコツを次世代へ渡す場面',
+  '世代交代のバランス':     '若手登用と熟練者の活用を両立させたい場面',
+  '権限の集中':             '全案件が社長決裁で判断が滞っている場面',
+  '分権化の欠如':           '現場に決める力がなく対応が遅れている場面',
+  '環境変化への対応力低下': '市場の変化に組織が追い付けていない場面',
+  '多角化戦略':             '既存事業の成長が頭打ちで新分野を探す場面',
+  'OJT':                    '実務を通じて後進に技能を身に付けさせる場面',
+  'マニュアル整備':         '手順が人によって異なり品質がばらつく場面',
+
+  // マーケティング
+  'STP分析':                '誰にどの価値を届けるかを決める場面',
+  'クロスセル':             '購入点数が少なく客単価が伸びない場面',
+  'アップセル':             'より上位の商品へ購入を引き上げたい場面',
+  'セット販売':             '関連商品を組み合わせて併買を促したい場面',
+  'POPによる訴求':          '売場で用途提案を伝え併買を促したい場面',
+  'マス広告':               '広域に一斉に認知を広げる予算がある場面',
+  'SNS活用':                '低コストで若年層に情報を届けたい場面',
+  'ストーリー訴求':         '作り手のこだわりを価値として伝える場面',
+  '体験価値の提供':         'モノでなく過ごし方で選ばれたい場面',
+  '地域ブランド':           '土地の資源を核に価値を訴求したい場面',
+  '地域ブランド化':         '地域固有の資源を模倣困難な強みにする場面',
+  '6次産業化':              '生産から加工販売まで一貫して手掛ける場面',
+  '地産地消':               '地元産の素材を地元で消費してもらう場面',
+  'サブスク化':             '継続課金で安定した収益を作りたい場面',
+  '新規顧客の開拓':         '既存顧客だけでは成長が頭打ちになる場面',
+  '新規出店':               '商圏そのものを物理的に広げたい場面',
+  'EC販売の開始':           '商圏外の顧客に直接販売したい場面',
+  'マーケットイン':         '顧客ニーズを起点に商品を開発する場面',
+  'ブランド構築':           '価格以外の理由で選ばれる状態を作る場面',
+  '販路の多角化':           '特定チャネルへの依存を減らしたい場面',
+  '値下げによる集客':       '短期的に来店客数を増やしたい場面',
+  '大幅な値下げ':           '在庫を早期に処分する必要がある場面',
+  '価格競争力の強化':       'コスト優位で価格勝負を挑む場面',
+  '大量仕入によるコスト削減': '仕入量をまとめて単価を下げる場面',
+  '営業人員の増強':         '訪問件数そのものが不足している場面',
+  '客単価の低下':           '1人あたりの購入額が下がっている状態',
+
+  // 生産・技術
+  'ポカヨケ':               '人的ミスによる不良を仕組みで防ぐ場面',
+  'チェック機構の導入':     '確認が作業者の目視だけに頼っている場面',
+  '作業標準化':             '作業者ごとに手順やコツが異なる場面',
+  'セル生産方式':           '多品種少量に柔軟に対応したい場面',
+  '多能工化':               '繁閑差に応じて人を融通したい場面',
+  '生産の平準化':           '受注の山谷で手待ちと残業が生じる場面',
+  'スキルマップの整備':     '誰が何をできるか可視化できていない場面',
+  'JIT':                    '必要な物を必要な時に必要な量だけ作る場面',
+  '需要予測':               '見込み生産の精度を上げたい場面',
+  '在庫回転率の改善':       '在庫が滞留し資金効率が落ちている場面',
+  '在庫の圧縮':             '倉庫を圧迫する滞留在庫を減らす場面',
+  '内段取の外段取化':       '段取替えで機械の停止時間が長い場面',
+  '外段取化':               '機械を止めずに段取り作業を進める場面',
+  '段取時間の短縮':         '切替の手間が小ロット化を妨げている場面',
+  '予防保全':               '故障してから直す事後保全を脱する場面',
+  'TPM':                    '全員参加で設備の総合効率を高める場面',
+  '設備の自動化':           '人手作業を機械に置き換えたい場面',
+  '生産ラインの増設':       '生産能力そのものが不足している場面',
+  '生産能力の増強':         '受注に対し作れる量が足りない場面',
+  '大量生産化':             '同一品を大量に作り規模の経済を得る場面',
+  '外注化の推進':           '固定費を変動費化し繁閑を吸収する場面',
+  '外注比率の引上げ':       '自社の生産余力が不足している場面',
+  '仕入先の変更':           '調達品の品質や価格に問題がある場面',
+  '設備投資の抑制':         '手元資金を優先し支出を抑える場面',
+  '生産統制の見える化':     '進捗と負荷が誰にも見えていない場面',
+  '工程管理システムの導入': '部門間で生産情報が分断されている場面',
+  '情報の一元管理':         '同じ情報が各所に散在している場面',
+
+  // 財務
+  '損益分岐点分析':         '何個売れば黒字になるかを把握する場面',
+  'NPV法':                  '投資案件の採否を現在価値で判断する場面',
+};
 
 const PROCESS_PROBLEMS = [
   // ---- 事例I 組織・人事 ----
@@ -2066,10 +2168,10 @@ const PROCESS_PROBLEMS = [
     questionText: 'A社が熟練工の技能継承を進めるにあたっての留意点を、100字以内で述べよ。',
     patternAnswer: 'ryuii',
     patternHint: '「留意点」は施策そのものではなく、進める際に注意すべきことを理由付きで書く。',
-    template: ['留意点は①', 'で熟練工の雇用を延長しつつ、継承に十分な期間を確保すること。言語化が難しい', 'の移転には時間を要するためである。②若手への配置を計画的に進め', 'を図ることも必要である。'],
+    template: ['留意点は①', 'で雇用を延長し継承期間を確保すること。', 'の移転には時間を要するためである。②若手配置を計画的に進め', 'を図ること。'],
     blanks: ['再雇用制度', '暗黙知', '世代交代のバランス'],
     blankPool: ['再雇用制度', '暗黙知', '世代交代のバランス', '成果主義', '形式知', '価格競争力'],
-    modelAnswer: '留意点は①再雇用制度で熟練工の雇用を延長しつつ、継承に十分な期間を確保すること。言語化が難しい暗黙知の移転には時間を要するためである。②若手への配置を計画的に進め世代交代のバランスを図ることも必要である。',
+    modelAnswer: '留意点は①再雇用制度で雇用を延長し継承期間を確保すること。暗黙知の移転には時間を要するためである。②若手配置を計画的に進め世代交代のバランスを図ること。',
   },
 
   // ---- 事例II マーケティング ----
@@ -2230,10 +2332,10 @@ const PROCESS_PROBLEMS = [
     questionText: '多品種少量生産に対応する生産方式の特徴について、100字以内で述べよ。',
     patternAnswer: 'tokucho',
     patternHint: '「特徴を述べよ」は仕組みの説明に加え、それが何を可能にするか（差別化要因）まで書く。',
-    template: ['特徴は①1人または少人数が複数工程を担当する', 'を採り、②作業者の', 'により工程間の仕掛や運搬を削減できる点。これにより品種切替に強い', 'を確保でき、小ロット短納期の要請に応えられる。'],
+    template: ['特徴は①少人数が複数工程を担当する', 'を採り、②作業者の', 'で仕掛や運搬を削減できる点。品種切替に強い', 'を確保でき、小ロット短納期に応えられる。'],
     blanks: ['セル生産方式', '多能工化', 'フレキシビリティ'],
     blankPool: ['セル生産方式', '多能工化', 'フレキシビリティ', 'ライン生産方式', '属人化', 'スケールメリット'],
-    modelAnswer: '特徴は①1人または少人数が複数工程を担当するセル生産方式を採り、②作業者の多能工化により工程間の仕掛や運搬を削減できる点。これにより品種切替に強いフレキシビリティを確保でき、小ロット短納期の要請に応えられる。',
+    modelAnswer: '特徴は①少人数が複数工程を担当するセル生産方式を採り、②作業者の多能工化で仕掛や運搬を削減できる点。品種切替に強いフレキシビリティを確保でき、小ロット短納期に応えられる。',
   },
 
   // ---- 事例I 組織・人事（追加分） ----
@@ -2252,10 +2354,10 @@ const PROCESS_PROBLEMS = [
     questionText: 'A社の評価制度における課題と、その対応策について100字以内で述べよ。',
     patternAnswer: 'kadai',
     patternHint: '「課題を述べよ」は現状の問題点を指摘したうえで、必ず対応策までセットで書く。評価制度では納得感の醸成が要点。',
-    template: ['課題は評価が部門長の裁量に委ねられ', 'が不透明で従業員の納得感を欠く点。対応策は①成果に至る行動を評価する', 'を導入し、②求める', 'を全社に明示して評価と処遇を連動させ、透明性を高めること。'],
+    template: ['課題は評価が部門長の裁量に委ねられ', 'が不透明な点。対応策は①行動を評価する', 'を導入し、②求める', 'を明示して処遇と連動させ透明性を高めること。'],
     blanks: ['評価基準', 'コンピテンシー評価', '行動基準'],
     blankPool: ['評価基準', 'コンピテンシー評価', '行動基準', '在庫基準', 'セル生産方式', '検査手順'],
-    modelAnswer: '課題は評価が部門長の裁量に委ねられ評価基準が不透明で従業員の納得感を欠く点。対応策は①成果に至る行動を評価するコンピテンシー評価を導入し、②求める行動基準を全社に明示して評価と処遇を連動させ、透明性を高めること。',
+    modelAnswer: '課題は評価が部門長の裁量に委ねられ評価基準が不透明な点。対応策は①行動を評価するコンピテンシー評価を導入し、②求める行動基準を明示して処遇と連動させ透明性を高めること。',
   },
   {
     id: 'proc_c1_06', case: 'case1', title: '意思決定の遅さ',
@@ -2272,10 +2374,10 @@ const PROCESS_PROBLEMS = [
     questionText: 'A社で商機を逃す事態が生じている理由を、100字以内で述べよ。',
     patternAnswer: 'riyu',
     patternHint: '「理由を述べよ」は原因を挙げるだけでなく、それがなぜ結果につながるのかの筋道まで書く。',
-    template: ['理由は①すべての案件で社長決裁を要する', 'により、現場が顧客の要望に即答できないこと。②', 'が進んでおらず判断が一点に滞留するため、変化の速い市場において', 'を招き、回答を待つ間に競合へ流出するためである。'],
+    template: ['理由は①全案件が社長決裁を要する', 'により現場が即答できないこと。②', 'が進まず判断が滞留するため、変化の速い市場で', 'を招き競合へ流出するためである。'],
     blanks: ['権限の集中', '分権化', '対応の遅れ'],
     blankPool: ['権限の集中', '分権化', '対応の遅れ', '在庫の増加', '標準化', '品質の低下'],
-    modelAnswer: '理由は①すべての案件で社長決裁を要する権限の集中により、現場が顧客の要望に即答できないこと。②分権化が進んでおらず判断が一点に滞留するため、変化の速い市場において対応の遅れを招き、回答を待つ間に競合へ流出するためである。',
+    modelAnswer: '理由は①全案件が社長決裁を要する権限の集中により現場が即答できないこと。②分権化が進まず判断が滞留するため、変化の速い市場で対応の遅れを招き競合へ流出するためである。',
   },
   {
     id: 'proc_c1_07', case: 'case1', title: 'M&A後の統合',
@@ -2292,10 +2394,10 @@ const PROCESS_PROBLEMS = [
     questionText: 'A社がB社との統合を進めるにあたっての留意点を、100字以内で述べよ。',
     patternAnswer: 'ryuii',
     patternHint: '「留意点」は施策そのものではなく、進める際に注意すべきことを理由付きで書く。M&Aでは制度と心理の両面に配慮する。',
-    template: ['留意点は①統合後の', 'を両社の従業員に丁寧に共有すること。一方的な吸収と受け取られると反発を招くためである。②', 'を編成して協働の実績を作りつつ、', 'は段階的に統一し、処遇の急変による離職を防ぐこと。'],
+    template: ['留意点は①統合後の', 'を丁寧に共有すること。吸収と受け取られると反発を招くためである。②', 'を編成し協働実績を作りつつ、', 'は段階的に統一し離職を防ぐこと。'],
     blanks: ['ビジョン', '混成チーム', '人事制度'],
     blankPool: ['ビジョン', '混成チーム', '人事制度', '生産計画', '専任チーム', '検査基準'],
-    modelAnswer: '留意点は①統合後のビジョンを両社の従業員に丁寧に共有すること。一方的な吸収と受け取られると反発を招くためである。②混成チームを編成して協働の実績を作りつつ、人事制度は段階的に統一し、処遇の急変による離職を防ぐこと。',
+    modelAnswer: '留意点は①統合後のビジョンを丁寧に共有すること。吸収と受け取られると反発を招くためである。②混成チームを編成し協働実績を作りつつ、人事制度は段階的に統一し離職を防ぐこと。',
   },
   {
     id: 'proc_c1_08', case: 'case1', title: '新規事業と既存事業の軋轢',
@@ -2312,10 +2414,10 @@ const PROCESS_PROBLEMS = [
     questionText: '新規事業を分社化することについて、A社にとってのメリットとデメリットを100字以内で述べよ。',
     patternAnswer: 'merit',
     patternHint: '「メリットとデメリット」は必ず両方書く。片方だけでは半分の得点にしかならない。',
-    template: ['メリットは①新規事業に適した意思決定の速い', 'を確立でき、既存事業の管理手法との衝突を避けられる点。②探索と深化を両立する', 'を実現できる点。デメリットは限られた人材や資金が', 'し、間接部門が重複してコストが増す点。'],
+    template: ['メリットは①新規事業に適した', 'を確立でき衝突を避けられる点、②探索と深化を両立する', 'を実現できる点。デメリットは人材や資金が', 'し間接部門が重複する点。'],
     blanks: ['組織文化', '両利きの経営', '分散'],
     blankPool: ['組織文化', '両利きの経営', '分散', '生産方式', '規模の経済', '停滞'],
-    modelAnswer: 'メリットは①新規事業に適した意思決定の速い組織文化を確立でき、既存事業の管理手法との衝突を避けられる点。②探索と深化を両立する両利きの経営を実現できる点。デメリットは限られた人材や資金が分散し、間接部門が重複してコストが増す点。',
+    modelAnswer: 'メリットは①新規事業に適した組織文化を確立でき衝突を避けられる点、②探索と深化を両立する両利きの経営を実現できる点。デメリットは人材や資金が分散し間接部門が重複する点。',
   },
 
   // ---- 事例II マーケティング（追加分） ----
@@ -2394,10 +2496,10 @@ const PROCESS_PROBLEMS = [
     questionText: 'B社で新商品の売れ行きが読めなくなっている理由を、100字以内で述べよ。',
     patternAnswer: 'riyu',
     patternHint: '「理由を述べよ」では、なぜその状態が結果を招くのかを因果でつなぐ。ここでは情報基盤の欠如が起点。',
-    template: ['理由は①商品開発が社長の勘と経験という', 'に依存し、顧客の声を反映する仕組みがないこと。②レジが旧型で', 'を蓄積できず、誰が何をいつ買ったかを分析できないため、', 'の発想に立てず市場の変化を捉えられないためである。'],
+    template: ['理由は①商品開発が社長の勘という', 'に依存し顧客の声を反映できないこと。②', 'を蓄積できず購買実態を分析できないため、', 'の発想に立てず変化を捉えられないためである。'],
     blanks: ['プロダクトアウト', 'POSデータ', 'マーケットイン'],
     blankPool: ['プロダクトアウト', 'POSデータ', 'マーケットイン', 'プル型戦略', '生産実績', 'コストリーダーシップ'],
-    modelAnswer: '理由は①商品開発が社長の勘と経験というプロダクトアウトに依存し、顧客の声を反映する仕組みがないこと。②レジが旧型でPOSデータを蓄積できず、誰が何をいつ買ったかを分析できないため、マーケットインの発想に立てず市場の変化を捉えられないためである。',
+    modelAnswer: '理由は①商品開発が社長の勘というプロダクトアウトに依存し顧客の声を反映できないこと。②POSデータを蓄積できず購買実態を分析できないため、マーケットインの発想に立てず変化を捉えられないためである。',
   },
 
   // ---- 事例III 生産・技術（追加分） ----
@@ -2416,10 +2518,10 @@ const PROCESS_PROBLEMS = [
     questionText: 'C社の取り付け忘れによる不良を削減する施策について、100字以内で助言せよ。',
     patternAnswer: 'sesaku',
     patternHint: '人的ミスは「注意する」では減らない。仕組みで防ぐ発想（ポカヨケ）に立つのが定石。',
-    template: ['施策は①部品が未装着なら次工程に送れない', 'を治具に組み込み、②必要部品を数量どおり配膳して過不足が一目で分かる', 'を設けること。効果は目視確認への依存がなくなり、', 'による不良と手直し工数が削減される点。'],
+    template: ['施策は①未装着なら次工程に送れない', 'を治具に組み込み、②過不足が一目で分かる', 'を設けること。効果は目視依存がなくなり', 'による不良と手直し工数が減る点。'],
     blanks: ['ポカヨケ', 'チェック機構', '人的ミス'],
     blankPool: ['ポカヨケ', 'チェック機構', '人的ミス', '外段取化', '予備在庫', '設備故障'],
-    modelAnswer: '施策は①部品が未装着なら次工程に送れないポカヨケを治具に組み込み、②必要部品を数量どおり配膳して過不足が一目で分かるチェック機構を設けること。効果は目視確認への依存がなくなり、人的ミスによる不良と手直し工数が削減される点。',
+    modelAnswer: '施策は①未装着なら次工程に送れないポカヨケを治具に組み込み、②過不足が一目で分かるチェック機構を設けること。効果は目視依存がなくなり人的ミスによる不良と手直し工数が減る点。',
   },
   {
     id: 'proc_c3_06', case: 'case3', title: '部門間の情報共有',
@@ -2436,10 +2538,10 @@ const PROCESS_PROBLEMS = [
     questionText: 'C社の生産計画に関する課題と、その対応策について100字以内で述べよ。',
     patternAnswer: 'kadai',
     patternHint: '情報が「無い」のではなく「共有されていない」点が課題。対応策は仕組み化に落とす。',
-    template: ['課題は営業の受注情報が製造に伝わらず、', 'が頻発して現場が混乱している点。対応策は①受注と生産の情報を', 'する工程管理システムを導入し、②進捗と負荷を', 'して営業が納期を約束する前に製造能力を確認できる体制を作ること。'],
+    template: ['課題は受注情報が製造に伝わらず', 'が頻発する点。対応策は①受注と生産の情報を', 'する工程管理システムを導入し、②負荷を', 'して営業が納期回答前に製造能力を確認できる体制を作ること。'],
     blanks: ['生産計画の変更', '一元管理', '見える化'],
     blankPool: ['生産計画の変更', '一元管理', '見える化', '設備の故障', '外部委託', '属人化'],
-    modelAnswer: '課題は営業の受注情報が製造に伝わらず、生産計画の変更が頻発して現場が混乱している点。対応策は①受注と生産の情報を一元管理する工程管理システムを導入し、②進捗と負荷を見える化して営業が納期を約束する前に製造能力を確認できる体制を作ること。',
+    modelAnswer: '課題は受注情報が製造に伝わらず生産計画の変更が頻発する点。対応策は①受注と生産の情報を一元管理する工程管理システムを導入し、②負荷を見える化して営業が納期回答前に製造能力を確認できる体制を作ること。',
   },
   {
     id: 'proc_c3_07', case: 'case3', title: '製品在庫の滞留',
@@ -2456,10 +2558,10 @@ const PROCESS_PROBLEMS = [
     questionText: 'C社で製品在庫が滞留している理由を、100字以内で述べよ。',
     patternAnswer: 'riyu',
     patternHint: '在庫問題は「なぜ作りすぎるのか」を遡ると段取り時間や需要予測に行き着く。因果を1本の線で書く。',
-    template: ['理由は①段取替えを避けるため', 'を続けており、実需以上の数量を一度に作ってしまうこと。②変動の大きい派生品種まで', 'で生産しているため、売れ残りが', 'として滞留し倉庫を圧迫するためである。'],
+    template: ['理由は①段取替えを避けるため', 'を続け実需以上に作ってしまうこと。②変動の大きい品種まで', 'で生産するため、売れ残りが', 'として滞留し倉庫を圧迫するためである。'],
     blanks: ['大ロット生産', '見込み', '長期在庫'],
     blankPool: ['大ロット生産', '見込み', '長期在庫', '受注生産', '手直し', '仕掛品'],
-    modelAnswer: '理由は①段取替えを避けるため大ロット生産を続けており、実需以上の数量を一度に作ってしまうこと。②変動の大きい派生品種まで見込みで生産しているため、売れ残りが長期在庫として滞留し倉庫を圧迫するためである。',
+    modelAnswer: '理由は①段取替えを避けるため大ロット生産を続け実需以上に作ってしまうこと。②変動の大きい品種まで見込みで生産するため、売れ残りが長期在庫として滞留し倉庫を圧迫するためである。',
   },
   {
     id: 'proc_c3_08', case: 'case3', title: '繁閑差への対応',
@@ -2476,10 +2578,10 @@ const PROCESS_PROBLEMS = [
     questionText: '繁閑差に対応できる生産体制の特徴について、100字以内で述べよ。',
     patternAnswer: 'tokucho',
     patternHint: '「特徴を述べよ」は体制の説明に加え、それが何を可能にするかまで書く。ここでは繁閑への吸収力。',
-    template: ['特徴は①作業者が複数工程を担当できる', 'が進み、繁忙工程へ柔軟に応援に入れる点。②習熟状況を', 'で可視化し計画的に育成する点。これにより月初の手待ちと月末の残業を吸収し、生産を', 'できる体制となる。'],
+    template: ['特徴は①作業者が複数工程を担当できる', 'が進み繁忙工程へ応援に入れる点、②習熟状況を', 'で可視化し計画的に育成する点。手待ちと残業を吸収し生産を', 'できる体制となる。'],
     blanks: ['多能工化', 'スキルマップ', '平準化'],
     blankPool: ['多能工化', 'スキルマップ', '平準化', '外注化', '作業日報', '標準化'],
-    modelAnswer: '特徴は①作業者が複数工程を担当できる多能工化が進み、繁忙工程へ柔軟に応援に入れる点。②習熟状況をスキルマップで可視化し計画的に育成する点。これにより月初の手待ちと月末の残業を吸収し、生産を平準化できる体制となる。',
+    modelAnswer: '特徴は①作業者が複数工程を担当できる多能工化が進み繁忙工程へ応援に入れる点、②習熟状況をスキルマップで可視化し計画的に育成する点。手待ちと残業を吸収し生産を平準化できる体制となる。',
   },
 ];
 
@@ -4951,13 +5053,28 @@ scoreは0〜10の整数。`;
   function buildProcessQueue(cases) {
     const pool = PROCESS_PROBLEMS.filter(p => cases.includes(p.case));
     const prog = data.processProgress || {};
-    const unfinished = pool.filter(p => (prog[p.id]?.bestSteps || 0) < 4);
-    const finished   = pool.filter(p => (prog[p.id]?.bestSteps || 0) >= 4);
+    const unfinished = pool.filter(p => (prog[p.id]?.bestSteps || 0) < PROC_STEP_COUNT);
+    const finished   = pool.filter(p => (prog[p.id]?.bestSteps || 0) >= PROC_STEP_COUNT);
     const ordered = [...shuffleArray(unfinished), ...shuffleArray(finished)];
     return ordered.slice(0, PROC_SESSION_SIZE).map(p => {
+      // Step4 解答の型：正解＋他の型3つをシャッフル
       const wrong = shuffleArray(ANSWER_PATTERNS.filter(x => x.id !== p.patternAnswer)).slice(0, 3);
       const patternChoices = shuffleArray([ANSWER_PATTERNS.find(x => x.id === p.patternAnswer), ...wrong]);
-      return { prob: p, patternChoices, patternCorrect: patternChoices.findIndex(x => x.id === p.patternAnswer) };
+
+      // Step3 使い分け：選ばなかった誤答キーワードから1語を選び、その使い所を問う
+      const distractors = p.keywordPool.filter(k => !p.keywordAnswer.includes(k) && KEYWORD_USAGE[k]);
+      const usageTarget = distractors[Math.floor(Math.random() * distractors.length)];
+      const others = shuffleArray(Object.keys(KEYWORD_USAGE).filter(k => k !== usageTarget && KEYWORD_USAGE[k] !== KEYWORD_USAGE[usageTarget])).slice(0, 3);
+      const usageChoices = shuffleArray([KEYWORD_USAGE[usageTarget], ...others.map(k => KEYWORD_USAGE[k])]);
+
+      return {
+        prob: p,
+        patternChoices,
+        patternCorrect: patternChoices.findIndex(x => x.id === p.patternAnswer),
+        usageTarget,
+        usageChoices,
+        usageCorrect: usageChoices.indexOf(KEYWORD_USAGE[usageTarget]),
+      };
     });
   }
 
@@ -4985,8 +5102,9 @@ scoreは0〜10の整数。`;
       const b = [...p.keywordAnswer].sort();
       return a.length === b.length && a.every((x, i) => x === b[i]);
     }
-    if (step === 3) return pick === item.patternCorrect;
-    // step 4: 全空欄が順序どおり一致
+    if (step === 3) return pick === item.usageCorrect;
+    if (step === 4) return pick === item.patternCorrect;
+    // step 5: 全空欄が順序どおり一致
     return p.blanks.every((ans, i) => (pick?.[i] || '').trim() === ans);
   }
 
@@ -5003,7 +5121,7 @@ scoreは0〜10の整数。`;
   // 次のステップ、または次の問題へ
   function nextProcStep() {
     const item = procQueue[procIdx];
-    if (procStep < 4) {
+    if (procStep < PROC_STEP_COUNT) {
       setProcStep(s => s + 1);
       setProcPick(null);
       setProcRevealed(false);
@@ -5012,7 +5130,7 @@ scoreは0〜10の整数。`;
     }
     // 1問完了
     const flags = procStepFlags;
-    const allOk = flags.length === 4 && flags.every(Boolean);
+    const allOk = flags.length === PROC_STEP_COUNT && flags.every(Boolean);
     setProcResults(r => [...r, { id: item.prob.id, steps: flags }]);
     if (allOk) setProcScore(s => ({ ...s, perfect: s.perfect + 1 }));
     if (procIdx + 1 >= procQueue.length) { setProcPhase('result'); return; }
@@ -5029,7 +5147,7 @@ scoreは0〜10の整数。`;
     const item = procQueue[procIdx];
     if (item && procStepFlags.length > 0) {
       setProcResults(r => [...r, { id: item.prob.id, steps: procStepFlags }]);
-      if (procStepFlags.length === 4 && procStepFlags.every(Boolean)) {
+      if (procStepFlags.length === PROC_STEP_COUNT && procStepFlags.every(Boolean)) {
         setProcScore(s => ({ ...s, perfect: s.perfect + 1 }));
       }
     }
@@ -5550,7 +5668,7 @@ scoreは0〜10の整数。`;
         {tabMode === 'process' && (() => {
           const caseLabelsP = { case1: '事例I', case2: '事例II', case3: '事例III' };
           const caseColorsP = { case1: '#7c3aed', case2: '#0ea5e9', case3: '#f59e0b' };
-          const STEP_LABELS = ['課題発見', 'キーワード', '解答の型', '文章化'];
+          const STEP_LABELS = ['課題発見', 'キーワード', '使い分け', '解答の型', '文章化'];
           const progAll = data.processProgress || {};
 
           // ---- 結果画面 ----
@@ -5559,7 +5677,7 @@ scoreは0〜10の整数。`;
             const gainXp = procScore.correct * 5 + procScore.perfect * 20;
             const payload = { correct: procScore.correct, total: procScore.total, perfect: procScore.perfect, results: procResults };
             // ステップ別の正答率（どの思考段階が弱いかを可視化）
-            const perStep = [0, 1, 2, 3].map(i => {
+            const perStep = [0, 1, 2, 3, 4].map(i => {
               const rows = procResults.filter(r => r.steps.length > i);
               const ok = rows.filter(r => r.steps[i]).length;
               return { ok, total: rows.length };
@@ -5626,6 +5744,7 @@ scoreは0〜10の整数。`;
               procStep === 1 ? procPick !== null :
               procStep === 2 ? (procPick || []).length > 0 :
               procStep === 3 ? procPick !== null :
+              procStep === 4 ? procPick !== null :
                                (procPick || []).filter(x => (x || '').trim()).length === p.blanks.length;
 
             return (
@@ -5718,11 +5837,38 @@ scoreは0〜10の整数。`;
                 {/* ===== Step3 解答の型 ===== */}
                 {procStep === 3 && (
                   <>
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 14px', marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>この問題では使わなかった語</div>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: C.orange, textAlign: 'center' }}>{item.usageTarget}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>この語はどのような場面で使うか？</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                      {item.usageChoices.map((usage, idx) => {
+                        let bg = C.card, bd = C.border, color = C.text;
+                        if (procRevealed) {
+                          if (idx === item.usageCorrect) { bg = `${C.green}22`; bd = C.green; color = C.green; }
+                          else if (idx === procPick) { bg = `${C.red}22`; bd = C.red; color = C.red; }
+                          else color = C.muted;
+                        } else if (idx === procPick) { bg = `${C.accent}22`; bd = C.accent; color = C.accent; }
+                        return (
+                          <button key={idx} disabled={procRevealed} onClick={() => setProcPick(idx)}
+                            style={{ background: bg, border: `1px solid ${bd}`, borderRadius: 10, padding: '13px 14px', color, textAlign: 'left', cursor: procRevealed ? 'default' : 'pointer', fontSize: 13, lineHeight: 1.5 }}>
+                            {usage}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* ===== Step4 解答の型 ===== */}
+                {procStep === 4 && (
+                  <>
                     <div style={{ background: `linear-gradient(135deg, ${C.card}, #0d1a2e)`, border: `1px solid ${C.accent}44`, borderRadius: 12, padding: '16px 14px', marginBottom: 12 }}>
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>設問</div>
                       <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7 }}>{p.questionText}</div>
                     </div>
-                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>この聞かれ方に対する解答の型は？</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>この聞かれ方に対する解答の型・文章の形・字数配分は？</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
                       {item.patternChoices.map((pat, idx) => {
                         let bg = C.card, bd = C.border, color = C.text;
@@ -5734,8 +5880,11 @@ scoreは0〜10の整数。`;
                         return (
                           <button key={pat.id} disabled={procRevealed} onClick={() => setProcPick(idx)}
                             style={{ background: bg, border: `1px solid ${bd}`, borderRadius: 10, padding: '13px 14px', color, textAlign: 'left', cursor: procRevealed ? 'default' : 'pointer', fontSize: 13 }}>
-                            <div style={{ fontWeight: 700 }}>{pat.label}</div>
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>設問例: {pat.cue}</div>
+                            <div style={{ fontWeight: 700, marginBottom: 4 }}>{pat.label}</div>
+                            <div style={{ fontSize: 12, color: procRevealed && idx !== item.patternCorrect ? C.muted : C.accent, fontFamily: 'monospace', marginBottom: 3 }}>
+                              📝 {pat.form}
+                            </div>
+                            <div style={{ fontSize: 11, color: C.muted }}>📏 {pat.charPlan}　／　設問例: {pat.cue}</div>
                           </button>
                         );
                       })}
@@ -5743,8 +5892,8 @@ scoreは0〜10の整数。`;
                   </>
                 )}
 
-                {/* ===== Step4 穴埋め ===== */}
-                {procStep === 4 && (
+                {/* ===== Step5 穴埋め ===== */}
+                {procStep === 5 && (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <span style={{ fontSize: 12, color: C.muted }}>解答を組み立てよ</span>
@@ -5822,13 +5971,28 @@ scoreは0〜10の整数。`;
                     {procStep === 2 && <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>正解キーワード: {p.keywordAnswer.join('・')}</div>}
                     {procStep === 3 && (
                       <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
-                        <div style={{ marginBottom: 4 }}>正しい型: {ANSWER_PATTERNS.find(x => x.id === p.patternAnswer)?.label}</div>
-                        <div style={{ color: '#c4b5fd' }}>💡 {p.patternHint}</div>
+                        「{item.usageTarget}」は{item.usageChoices[item.usageCorrect]}で使う語。この問題の課題には結び付かない。
                       </div>
                     )}
-                    {procStep === 4 && (
+                    {procStep === 4 && (() => {
+                      const pat = ANSWER_PATTERNS.find(x => x.id === p.patternAnswer);
+                      return (
+                        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
+                          <div style={{ marginBottom: 6 }}>正しい型: <b>{pat?.label}</b></div>
+                          <div style={{ background: C.bg, borderRadius: 8, padding: '8px 10px', marginBottom: 6 }}>
+                            <div style={{ fontSize: 12, color: C.accent, fontFamily: 'monospace', marginBottom: 3 }}>📝 {pat?.form}</div>
+                            <div style={{ fontSize: 12, color: C.gold }}>📏 {pat?.charPlan}</div>
+                          </div>
+                          <div style={{ color: '#c4b5fd' }}>💡 {p.patternHint}</div>
+                        </div>
+                      );
+                    })()}
+                    {procStep === 5 && (
                       <div style={{ background: '#0a1a0a', borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.green}44` }}>
-                        <div style={{ fontSize: 11, color: C.green, fontWeight: 700, marginBottom: 4 }}>📄 模範解答</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>📄 模範解答</span>
+                          <span style={{ fontSize: 11, color: C.muted }}>{p.modelAnswer.length}字 / 100字</span>
+                        </div>
                         <div style={{ fontSize: 13, color: '#86efac', lineHeight: 1.8 }}>{p.modelAnswer}</div>
                       </div>
                     )}
@@ -5853,25 +6017,33 @@ scoreは0〜10の整数。`;
                         source: 'プロセス',
                         refId: `${p.id}_s${procStep}`,
                         wasCorrect: !!ok,
-                        questionText: procStep === 3 ? p.questionText : `${p.title}（${STEP_LABELS[procStep - 1]}）`,
+                        questionText:
+                          procStep === 3 ? `「${item.usageTarget}」はどのような場面で使う語か` :
+                          procStep === 4 ? p.questionText :
+                                           `${p.title}（${STEP_LABELS[procStep - 1]}）`,
                         myAnswer:
                           procStep === 1 ? (p.passage[procPick] ?? '') :
                           procStep === 2 ? (procPick || []).join('・') :
-                          procStep === 3 ? (item.patternChoices[procPick]?.label ?? '') :
+                          procStep === 3 ? (item.usageChoices[procPick] ?? '') :
+                          procStep === 4 ? (item.patternChoices[procPick]?.label ?? '') :
                                            (procPick || []).join('／'),
                         correctAnswer:
                           procStep === 1 ? p.passage[p.issueIdx] :
                           procStep === 2 ? p.keywordAnswer.join('・') :
-                          procStep === 3 ? (ANSWER_PATTERNS.find(x => x.id === p.patternAnswer)?.label ?? '') :
+                          procStep === 3 ? item.usageChoices[item.usageCorrect] :
+                          procStep === 4 ? (ANSWER_PATTERNS.find(x => x.id === p.patternAnswer)?.label ?? '') :
                                            p.blanks.join('／'),
-                        explanation: procStep === 3 ? p.patternHint : (procStep === 4 ? p.modelAnswer : p.issueLabel),
+                        explanation:
+                          procStep === 3 ? `この問題の課題は「${p.issueLabel}」` :
+                          procStep === 4 ? p.patternHint :
+                          procStep === 5 ? p.modelAnswer : p.issueLabel,
                       })}
                       style={{ background: C.purple + '22', border: `1px solid ${C.purple}44`, color: C.purple, borderRadius: 10, width: '100%', padding: 10, fontSize: 13, marginBottom: 10, cursor: 'pointer' }}>
                       🤖 AIに質問
                     </button>
                     <button onClick={nextProcStep}
                       style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 15 }}>
-                      {procStep < 4 ? `次へ → ${STEP_LABELS[procStep]}` : (procIdx + 1 >= procQueue.length ? '結果を見る' : '次の問題 →')}
+                      {procStep < PROC_STEP_COUNT ? `次へ → ${STEP_LABELS[procStep]}` : (procIdx + 1 >= procQueue.length ? '結果を見る' : '次の問題 →')}
                     </button>
                   </>
                 )}
@@ -5881,7 +6053,7 @@ scoreは0〜10の整数。`;
 
           // ---- メニュー ----
           const poolP = PROCESS_PROBLEMS.filter(p => procCases.includes(p.case));
-          const fullDone = PROCESS_PROBLEMS.filter(p => (progAll[p.id]?.bestSteps || 0) >= 4).length;
+          const fullDone = PROCESS_PROBLEMS.filter(p => (progAll[p.id]?.bestSteps || 0) >= PROC_STEP_COUNT).length;
 
           return (
             <div>
@@ -5892,7 +6064,7 @@ scoreは0〜10の整数。`;
 
               <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 16, border: `1px solid ${C.border}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, color: C.muted }}>全4ステップ完答済み</span>
+                  <span style={{ fontSize: 12, color: C.muted }}>全5ステップ完答済み</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>{fullDone} / {PROCESS_PROBLEMS.length}</span>
                 </div>
                 <div style={{ height: 6, background: C.bg, borderRadius: 3, overflow: 'hidden' }}>
@@ -5936,8 +6108,8 @@ scoreは0〜10の整数。`;
                     <span style={{ fontSize: 10, color: caseColorsP[p.case], fontWeight: 700, flexShrink: 0, width: 42 }}>{caseLabelsP[p.case]}</span>
                     <span style={{ flex: 1, fontSize: 12, color: C.text }}>{p.title}</span>
                     <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                      {[0, 1, 2, 3].map(i => (
-                        <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i < best ? C.green : '#334155', display: 'inline-block' }} />
+                      {[0, 1, 2, 3, 4].map(i => (
+                        <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i < best ? C.green : '#334155', display: 'inline-block' }} />
                       ))}
                     </span>
                   </div>
