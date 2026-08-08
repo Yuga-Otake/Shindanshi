@@ -2319,6 +2319,7 @@ const DEFAULT_DATA = {
   stampCalendar: {},
   signalMastery: {},   // { [swId]: { correct, wrong, streak } }
   signalBest: {},      // { attack: 最高スコア, highlight: 最高スコア }
+  aiQaHistory: [],  // AI質問履歴
 };
 
 function loadData() {
@@ -3161,7 +3162,8 @@ function ProcedureTab({ data, onCompleteCase, onNavigate, onUpdateProcedure }) {
 // ReflectionTab
 // ============================================================
 
-function ReflectionTab({ data, onSaveNote }) {
+function ReflectionTab({ data, onSaveNote, aiQaHistory, onUpdateMemo, onDeleteQa }) {
+  const [reflMode,      setReflMode]      = useState('notes'); // 'notes' | 'ai'
   const [selectedCase,  setSelectedCase]  = useState(null);
   const [date,          setDate]          = useState(todayStr());
   const [good,          setGood]          = useState('');
@@ -3170,6 +3172,7 @@ function ReflectionTab({ data, onSaveNote }) {
   const [nextAction,    setNextAction]    = useState('');
   const [saved,         setSaved]         = useState(false);
   const [selectedNote,  setSelectedNote]  = useState(null);
+  const qaList = aiQaHistory || [];
 
   function handleSave() {
     if (!selectedCase) return;
@@ -3241,6 +3244,50 @@ function ReflectionTab({ data, onSaveNote }) {
 
   return (
     <div style={{ padding: '16px 16px 80px' }}>
+      {/* モード切り替え */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button
+          onClick={() => setReflMode('notes')}
+          style={{
+            flex: 1, padding: '10px 8px', borderRadius: 10, border: 'none',
+            background: reflMode === 'notes' ? C.accent : C.card,
+            color: reflMode === 'notes' ? '#000' : C.muted,
+            fontWeight: reflMode === 'notes' ? 700 : 400,
+            cursor: 'pointer', fontSize: 13,
+          }}
+        >📝 振り返りノート</button>
+        <button
+          onClick={() => setReflMode('ai')}
+          style={{
+            flex: 1, padding: '10px 8px', borderRadius: 10, border: 'none',
+            background: reflMode === 'ai' ? C.accent : C.card,
+            color: reflMode === 'ai' ? '#000' : C.muted,
+            fontWeight: reflMode === 'ai' ? 700 : 400,
+            cursor: 'pointer', fontSize: 13,
+          }}
+        >🤖 AI質問履歴 ({qaList.length})</button>
+      </div>
+
+      {reflMode === 'ai' ? (
+        qaList.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: 14 }}>
+            まだAI質問履歴がありません
+          </div>
+        ) : (
+          <div>
+            {[...qaList].reverse().map(item => (
+              <AiQaHistoryCard
+                key={item.id}
+                item={item}
+                sameRefCount={item.refId ? qaList.filter(x => x.refId === item.refId).length : 1}
+                onUpdateMemo={onUpdateMemo}
+                onDeleteQa={onDeleteQa}
+              />
+            ))}
+          </div>
+        )
+      ) : (
+      <>
       <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>事例を選択</div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
         {CASES.map(c => (
@@ -3331,6 +3378,93 @@ function ReflectionTab({ data, onSaveNote }) {
             ))}
           </div>
         </>
+      )}
+      </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// AiQaHistoryCard
+// ============================================================
+
+function AiQaHistoryCard({ item, sameRefCount = 1, onUpdateMemo, onDeleteQa }) {
+  const [open, setOpen] = useState(false);
+  const [memo, setMemo] = useState(item.memo || '');
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '14px 16px', cursor: 'pointer' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 6, background: C.purple + '22', color: C.purple, fontWeight: 700, flexShrink: 0 }}>
+              {item.source}
+            </span>
+            {item.wasCorrect !== undefined && (
+              <span style={{
+                fontSize: 11, padding: '2px 7px', borderRadius: 6, flexShrink: 0, fontWeight: 700,
+                background: (item.wasCorrect ? C.green : C.red) + '22',
+                color: item.wasCorrect ? C.green : C.red,
+              }}>{item.wasCorrect ? '正解' : '不正解'}</span>
+            )}
+            {sameRefCount > 1 && (
+              <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 6, background: C.gold + '22', color: C.gold, fontWeight: 700, flexShrink: 0 }}>
+                同じ問題で{sameRefCount}件
+              </span>
+            )}
+            <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{item.date}</span>
+            <span style={{
+              fontSize: 13, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap', minWidth: 0,
+            }}>{item.userQuestion}</span>
+          </div>
+          <span style={{ color: C.muted, fontSize: 12, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+      {open && (
+        <div style={{ padding: '0 16px 16px' }}>
+          {item.questionText && (
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 8, lineHeight: 1.6 }}>{item.questionText}</div>
+          )}
+          <div style={{ fontSize: 12, color: C.red, marginBottom: 6 }}>
+            <span style={{ fontWeight: 700 }}>あなたの解答：</span>{item.myAnswer}
+          </div>
+          <div style={{ fontSize: 12, color: C.green, marginBottom: 6 }}>
+            <span style={{ fontWeight: 700 }}>正解：</span>{item.correctAnswer}
+          </div>
+          <div style={{ fontSize: 12, color: C.accent, marginBottom: 8 }}>
+            <span style={{ fontWeight: 700 }}>質問：</span>{item.userQuestion}
+          </div>
+          <div style={{
+            background: C.bg, borderRadius: 8, padding: '10px 12px', marginBottom: 10,
+            fontSize: 13, color: C.text, whiteSpace: 'pre-wrap', lineHeight: 1.8,
+          }}>
+            {item.aiAnswer}
+          </div>
+          <textarea
+            value={memo}
+            onChange={e => setMemo(e.target.value)}
+            onBlur={() => onUpdateMemo(item.id, memo)}
+            placeholder="自分用のメモ..."
+            rows={2}
+            style={{
+              width: '100%', padding: 10, background: '#1f2937', border: '1px solid #374151',
+              borderRadius: 8, color: C.text, fontSize: 13, resize: 'vertical',
+              fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', marginBottom: 8,
+            }}
+          />
+          <button
+            onClick={() => onDeleteQa(item.id)}
+            style={{
+              background: 'none', border: 'none', color: C.red,
+              fontSize: 12, cursor: 'pointer', padding: 0,
+            }}
+          >削除</button>
+        </div>
       )}
     </div>
   );
@@ -3711,10 +3845,244 @@ function HistoryEssayCard({ item, scoreColor, caseColors, caseProblemMap }) {
 }
 
 // ============================================================
+// AiQuestionModal
+// ============================================================
+
+function AiQuestionModal({ context, apiKey, onSave, onClose }) {
+  const [showReview, setShowReview] = useState(true);
+  const [question, setQuestion]     = useState('');
+  const [answer, setAnswer]         = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+
+  const wasCorrect = !!context.wasCorrect;
+
+  const quickQuestions = wasCorrect ? [
+    '他の選択肢がなぜ誤りなのか教えて',
+    'この論点を本試験の答案でどう書けばいい？',
+    '関連して押さえておくべき論点は？',
+  ] : [
+    'なぜこの選択肢が正解なのか、根拠を詳しく教えて',
+    '私が選んだ選択肢は何が間違っているの？',
+    '本試験で似た論点が出たらどう判断すればいい？',
+  ];
+
+  function insertQuickQuestion(q) {
+    setQuestion(prev => (prev.trim() ? `${prev}\n${q}` : q));
+  }
+
+  async function askAi() {
+    if (!question.trim() || !apiKey) return;
+    setLoading(true);
+    setError('');
+    setAnswer('');
+    const resultLine = wasCorrect
+      ? '受験者はこの問題に正解しています。理解をさらに深められるよう答えてください。'
+      : '受験者はこの問題に不正解でした。なぜ間違えたのかを解きほぐすように答えてください。';
+    const prompt = `あなたは中小企業診断士2次試験の指導講師です。受験者から問題についての質問が来ています。簡潔に、しかし本質が分かるように日本語で答えてください。
+${resultLine}
+
+【問題】${context.questionText}
+【受験者の解答】${context.myAnswer}
+【正解】${context.correctAnswer}
+【正誤】${wasCorrect ? '正解' : '不正解'}
+【解説】${context.explanation}
+【受験者の質問】${question}
+
+300字程度で回答してください。markdownの記号（**や#）は使わないでください。`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+          signal: controller.signal,
+        }
+      );
+      clearTimeout(timer);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        const errBody = (() => { try { return JSON.parse(errText); } catch { return null; } })();
+        const msg = errBody?.error?.message || `HTTP ${res.status}`;
+        setError(`APIエラー: ${msg}`);
+        setLoading(false);
+        return;
+      }
+      const json = await res.json();
+      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      setAnswer(text);
+    } catch (e) {
+      clearTimeout(timer);
+      const msg = e.name === 'AbortError' ? 'タイムアウト（30秒）しました。再度お試しください。' : `ネットワークエラー: ${e.message}`;
+      setError(msg);
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000,
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      overflowY: 'auto', padding: '24px 16px',
+    }}>
+      <div style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+        padding: 20, width: '100%', maxWidth: 440,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>🤖 AIに質問する</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 22, cursor: 'pointer', padding: 0 }}>×</button>
+        </div>
+
+        {/* 問題のふりかえり（折りたたみ） */}
+        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+          <button
+            onClick={() => setShowReview(s => !s)}
+            style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '12px 14px', cursor: 'pointer', color: C.text, fontSize: 13, fontWeight: 700 }}
+          >
+            問題のふりかえり {showReview ? '▲' : '▼'}
+          </button>
+          {showReview && (
+            <div style={{ padding: '0 14px 14px', fontSize: 13, lineHeight: 1.6 }}>
+              <div style={{ color: C.text, marginBottom: 8 }}>{context.questionText}</div>
+              <div style={{ color: wasCorrect ? C.green : C.red, marginBottom: 6 }}>
+                <span style={{ fontWeight: 700 }}>あなたの解答（{wasCorrect ? '正解' : '不正解'}）：</span>{context.myAnswer}
+              </div>
+              {!wasCorrect && (
+                <div style={{ color: C.green, marginBottom: 6 }}><span style={{ fontWeight: 700 }}>正解：</span>{context.correctAnswer}</div>
+              )}
+              {context.explanation && (
+                <div style={{ color: C.muted }}><span style={{ fontWeight: 700, color: C.text }}>解説：</span>{context.explanation}</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {!apiKey ? (
+          <div style={{
+            background: C.orange + '11', border: `1px solid ${C.orange}44`, borderRadius: 10,
+            padding: 14, fontSize: 13, color: C.orange, textAlign: 'center',
+          }}>
+            📝 論述タブでGeminiのAPIキーを設定してください
+          </div>
+        ) : (
+          <>
+            <textarea
+              value={question}
+              onChange={e => setQuestion(e.target.value)}
+              rows={4}
+              placeholder="例）なぜBではなくCが正解なのか、与件文のどこを根拠にすればいいですか？"
+              style={{
+                width: '100%', padding: 12, background: '#1f2937', border: '1px solid #374151',
+                borderRadius: 8, color: C.text, fontSize: 14, resize: 'vertical',
+                fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', marginBottom: 10,
+              }}
+            />
+
+            {/* よく使う質問（textareaに追記） */}
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>よく使う質問 ↓</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+              {quickQuestions.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => insertQuickQuestion(q)}
+                  style={{
+                    background: C.accent + '11', border: `1px solid ${C.accent}33`, borderRadius: 8,
+                    padding: '7px 10px', color: C.accent, fontSize: 11, textAlign: 'left', cursor: 'pointer',
+                  }}
+                >{q}</button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>自由に日本語で質問できます</div>
+
+            <button
+              onClick={askAi}
+              disabled={loading || !question.trim()}
+              style={{
+                width: '100%', padding: 12, borderRadius: 10, border: 'none',
+                background: (loading || !question.trim()) ? C.muted + '44' : `linear-gradient(135deg, ${C.purple}, ${C.accent})`,
+                color: (loading || !question.trim()) ? C.muted : '#fff',
+                fontWeight: 700, fontSize: 14,
+                cursor: (loading || !question.trim()) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {loading ? '考え中...' : '質問する'}
+            </button>
+
+            {error && (
+              <div style={{ marginTop: 12, fontSize: 13, color: C.red }}>{error}</div>
+            )}
+
+            {answer && (
+              <>
+                <div style={{
+                  marginTop: 14, background: C.purple + '11', border: `1px solid ${C.purple}33`,
+                  borderRadius: 10, padding: 14, fontSize: 13, color: C.text,
+                  whiteSpace: 'pre-wrap', lineHeight: 1.8,
+                }}>
+                  {answer}
+                </div>
+                <button
+                  onClick={() => { onSave({ userQuestion: question, aiAnswer: answer, wasCorrect }); onClose(); }}
+                  style={{
+                    width: '100%', marginTop: 12, padding: 12, borderRadius: 10,
+                    background: C.gold + '22', border: `1px solid ${C.gold}`,
+                    color: C.gold, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  }}
+                >📌 メモに保存</button>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PastQaPanel（同じ問題について過去に聞いたAI質問の一覧）
+// ============================================================
+
+function PastQaPanel({ refId, history }) {
+  const [open, setOpen] = useState(false);
+  const past = (history || []).filter(x => x.refId === refId);
+  if (past.length === 0) return null;
+
+  return (
+    <div style={{ background: C.gold + '11', border: `1px solid ${C.gold}44`, borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '10px 12px', cursor: 'pointer', color: C.gold, fontSize: 12, fontWeight: 700 }}
+      >
+        📌 この問題の過去メモ ({past.length}件) {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <div style={{ padding: '0 12px 12px' }}>
+          {[...past].reverse().map(m => (
+            <div key={m.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>{m.date}</div>
+              <div style={{ fontSize: 12, color: C.accent, marginBottom: 3 }}><span style={{ fontWeight: 700 }}>質問：</span>{m.userQuestion}</div>
+              <div style={{ fontSize: 12, color: C.text, whiteSpace: 'pre-wrap', lineHeight: 1.6, marginBottom: 3 }}>{m.aiAnswer}</div>
+              {m.memo && (
+                <div style={{ fontSize: 12, color: C.gold }}><span style={{ fontWeight: 700 }}>メモ：</span>{m.memo}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, onSignalComplete, pendingProblem, onClearPending }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, onSignalComplete, onSaveAiQa, pendingProblem, onClearPending }) {
   const [view, setView]                   = useState('list');
   const [tabMode, setTabMode]             = useState('study');
   const [selectedCase, setSelectedCase]   = useState('case4');
@@ -3765,6 +4133,8 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
   const [sigResults, setSigResults]       = useState([]);
   const [sigTimeLeft, setSigTimeLeft]     = useState(null);
   const sigTimerRef = useRef(null);
+  // AIに質問
+  const [aiQaContext, setAiQaContext]     = useState(null);
 
   function resetSolver() {
     setCurrentStep(0);
@@ -4435,6 +4805,23 @@ scoreは0〜10の整数。`;
                       <div style={{ fontSize: 12, color: C.muted, marginBottom: 3 }}>{w.signal}</div>
                       <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>→ {w.direction}</div>
                     </div>
+                    <PastQaPanel refId={w.id} history={data.aiQaHistory} />
+                    <button
+                      onClick={() => setAiQaContext({
+                        source: 'シグナル',
+                        refId: w.id,
+                        wasCorrect: isCorrect,
+                        questionText: `与件文シグナル: ${w.signal}`,
+                        myAnswer: item.choices ? item.choices[sigChoice] : (w.segments?.[sigChoice] ?? ''),
+                        correctAnswer: w.direction,
+                        explanation: '',
+                      })}
+                      style={{
+                        background: C.purple + '22', border: `1px solid ${C.purple}44`,
+                        color: C.purple, borderRadius: 10, width: '100%',
+                        padding: 10, fontSize: 13, marginBottom: 10, cursor: 'pointer',
+                      }}
+                    >🤖 AIに質問</button>
                     <button onClick={nextSignal} style={{
                       width: '100%', padding: '14px', borderRadius: 12, border: 'none',
                       background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 15,
@@ -4797,6 +5184,27 @@ scoreは0〜10の整数。`;
                     {estep.explanation}
                   </div>
                 )}
+                {examShowExp && (
+                  <>
+                    <PastQaPanel refId={`${ep.id}_${estep.id}`} history={data.aiQaHistory} />
+                    <button
+                      onClick={() => setAiQaContext({
+                        source: '模擬試験',
+                        refId: `${ep.id}_${estep.id}`,
+                        wasCorrect: examChoice === estep.correct,
+                        questionText: estep.question,
+                        myAnswer: estep.choices[examChoice],
+                        correctAnswer: estep.choices[estep.correct],
+                        explanation: estep.explanation,
+                      })}
+                      style={{
+                        background: C.purple + '22', border: `1px solid ${C.purple}44`,
+                        color: C.purple, borderRadius: 10, width: '100%',
+                        padding: 10, fontSize: 13, marginBottom: 14, cursor: 'pointer',
+                      }}
+                    >🤖 AIに質問</button>
+                  </>
+                )}
                 {examChoice !== null && (
                   <button onClick={handleExamNext} style={{
                     width: '100%', padding: '14px', borderRadius: 12, border: 'none',
@@ -5005,6 +5413,27 @@ scoreは0〜10の整数。`;
                     </div>
                     {step.explanation}
                   </div>
+                )}
+                {drillShowExp && (
+                  <>
+                    <PastQaPanel refId={`${item.problem.id}_${step.id}`} history={data.aiQaHistory} />
+                    <button
+                      onClick={() => setAiQaContext({
+                        source: '即トレ',
+                        refId: `${item.problem.id}_${step.id}`,
+                        wasCorrect: drillChoice === step.correct,
+                        questionText: step.question,
+                        myAnswer: step.choices[drillChoice],
+                        correctAnswer: step.choices[step.correct],
+                        explanation: step.explanation,
+                      })}
+                      style={{
+                        background: C.purple + '22', border: `1px solid ${C.purple}44`,
+                        color: C.purple, borderRadius: 10, width: '100%',
+                        padding: 10, fontSize: 13, marginBottom: 12, cursor: 'pointer',
+                      }}
+                    >🤖 AIに質問</button>
+                  </>
                 )}
                 {drillChoice !== null && (
                   <button onClick={nextDrillQuestion} style={{
@@ -5501,6 +5930,15 @@ scoreは0〜10の整数。`;
             >問題一覧へ</button>
           </div>
         </div>
+
+        {aiQaContext && (
+          <AiQuestionModal
+            context={aiQaContext}
+            apiKey={data.geminiApiKey || ''}
+            onSave={(qa) => { onSaveAiQa({ ...aiQaContext, ...qa }); setAiQaContext(null); }}
+            onClose={() => setAiQaContext(null)}
+          />
+        )}
       </div>
     );
   }
@@ -5598,6 +6036,29 @@ scoreは0〜10の整数。`;
         </div>
       )}
 
+      {/* AIに質問 */}
+      {showExplanation && (
+        <>
+          <PastQaPanel refId={`${activeProblem.id}_${step.id}`} history={data.aiQaHistory} />
+          <button
+            onClick={() => setAiQaContext({
+              source: '演習',
+              refId: `${activeProblem.id}_${step.id}`,
+              wasCorrect: selectedChoice === step.correct,
+              questionText: step.question,
+              myAnswer: step.choices[selectedChoice],
+              correctAnswer: step.choices[step.correct],
+              explanation: step.explanation,
+            })}
+            style={{
+              background: C.purple + '22', border: `1px solid ${C.purple}44`,
+              color: C.purple, borderRadius: 10, width: '100%',
+              padding: 10, fontSize: 13, marginBottom: 16, cursor: 'pointer',
+            }}
+          >🤖 AIに質問</button>
+        </>
+      )}
+
       {/* Next button */}
       {showExplanation && (
         <button
@@ -5611,6 +6072,15 @@ scoreは0〜10の整数。`;
         >
           {currentStep + 1 >= totalSteps ? '結果を見る →' : '次へ →'}
         </button>
+      )}
+
+      {aiQaContext && (
+        <AiQuestionModal
+          context={aiQaContext}
+          apiKey={data.geminiApiKey || ''}
+          onSave={(qa) => { onSaveAiQa({ ...aiQaContext, ...qa }); setAiQaContext(null); }}
+          onClose={() => setAiQaContext(null)}
+        />
       )}
     </div>
   );
@@ -6011,6 +6481,24 @@ export default function App() {
     commit(d);
   }
 
+  function handleSaveAiQa(entry) {
+    const item = {
+      ...entry,
+      id: Date.now(),
+      memo: '',
+      date: new Date().toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    };
+    commit({ ...data, aiQaHistory: [...(data.aiQaHistory || []), item] });
+  }
+
+  function handleUpdateAiQaMemo(id, memo) {
+    commit({ ...data, aiQaHistory: (data.aiQaHistory || []).map(x => x.id === id ? { ...x, memo } : x) });
+  }
+
+  function handleDeleteAiQa(id) {
+    commit({ ...data, aiQaHistory: (data.aiQaHistory || []).filter(x => x.id !== id) });
+  }
+
   // シグナルワード演習：マスタリー更新＋ベストスコア更新＋XP付与
   function handleSignalComplete({ mode, correct, total, maxStreak, results }) {
     let d = { ...data };
@@ -6230,7 +6718,13 @@ export default function App() {
         />
       )}
       {tab === 'reflection' && (
-        <ReflectionTab data={data} onSaveNote={handleSaveNote} />
+        <ReflectionTab
+          data={data}
+          onSaveNote={handleSaveNote}
+          aiQaHistory={data.aiQaHistory || []}
+          onUpdateMemo={handleUpdateAiQaMemo}
+          onDeleteQa={handleDeleteAiQa}
+        />
       )}
       {tab === 'history' && (
         <HistoryTab data={data} />
@@ -6246,6 +6740,7 @@ export default function App() {
           onSaveApiKey={handleSaveApiKey}
           onSaveEssayHistory={handleSaveEssayHistory}
           onSignalComplete={handleSignalComplete}
+          onSaveAiQa={handleSaveAiQa}
           pendingProblem={pendingProblem}
           onClearPending={() => setPendingProblem(null)}
         />
