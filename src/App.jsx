@@ -1973,6 +1973,268 @@ function getSignalStars(mastery) {
   return 0;
 }
 
+// ============================================================
+// Process Problems（本番思考プロセスの4ステップ連鎖）
+// Step1 課題発見 → Step2 キーワード想起 → Step3 解答の型 → Step4 文章化
+// ============================================================
+
+const ANSWER_PATTERNS = [
+  { id: 'sesaku',  label: '施策＋効果',           cue: '助言せよ／提案せよ' },
+  { id: 'kadai',   label: '課題＋対応策',         cue: '課題を述べよ' },
+  { id: 'riyu',    label: '理由＋根拠',           cue: '理由を述べよ／なぜか' },
+  { id: 'tokucho', label: '特徴＋差別化要因',     cue: '特徴を述べよ' },
+  { id: 'merit',   label: 'メリット＋デメリット', cue: '両面から述べよ' },
+  { id: 'ryuii',   label: '留意点＋その理由',     cue: '留意点を述べよ' },
+];
+
+const PROCESS_PROBLEMS = [
+  // ---- 事例I 組織・人事 ----
+  {
+    id: 'proc_c1_01', case: 'case1', title: '主体性の欠如',
+    passage: [
+      'A社は創業以来、社長がすべての意思決定を担ってきた。',
+      '若手社員は指示された業務は正確にこなすが、自ら課題を見つけて動くことがない。',
+      '売上は横ばいで推移しており、',
+      '社長は次の成長の打ち手を模索している。',
+    ],
+    issueIdx: 1,
+    issueLabel: '主体性・自律性の欠如',
+    keywordPool: ['権限委譲', '自律性の醸成', 'ジョブローテーション', '賃金水準の引上げ', '外注化の推進', '在庫の圧縮'],
+    keywordAnswer: ['権限委譲', '自律性の醸成', 'ジョブローテーション'],
+    questionText: 'A社が若手社員の主体性を高めるために取るべき施策について、100字以内で助言せよ。',
+    patternAnswer: 'sesaku',
+    patternHint: '「助言せよ」は施策を挙げるだけでなく、その効果まで書いて初めて解答になる。',
+    template: ['施策は①', 'により現場に判断権限を与え、②', 'で複数業務を経験させること。効果は従業員の', 'が高まり主体的な提案が増える点。'],
+    blanks: ['権限委譲', 'ジョブローテーション', '自律性'],
+    blankPool: ['権限委譲', 'ジョブローテーション', '自律性', '成果主義', '外注比率', '在庫回転率'],
+    modelAnswer: '施策は①権限委譲により現場に判断権限を与え、②ジョブローテーションで複数業務を経験させること。効果は従業員の自律性が高まり主体的な提案が増える点。',
+  },
+  {
+    id: 'proc_c1_02', case: 'case1', title: '業務の属人化',
+    passage: [
+      'A社の事務手続きは長年見直されておらず、',
+      '社長も改善の必要性は感じている。',
+      '各種手順は担当者の口頭伝承に頼っており属人化が進んでいる。',
+      '近年は担当者の休暇時に処理が滞る事態も生じている。',
+    ],
+    issueIdx: 2,
+    issueLabel: '口頭伝承による属人化',
+    keywordPool: ['マニュアル整備', '標準化', 'OJT', '成果主義の導入', 'M&Aの実施', '多角化戦略'],
+    keywordAnswer: ['マニュアル整備', '標準化', 'OJT'],
+    questionText: 'A社の事務業務における課題と、その対応策について100字以内で述べよ。',
+    patternAnswer: 'kadai',
+    patternHint: '「課題を述べよ」は現状の問題点を指摘したうえで、必ず対応策までセットで書く。',
+    template: ['課題は業務手順が', 'に頼り属人化し、担当者不在時に業務が停滞する点。対応策は①手順書の', 'により誰でも同一品質で処理できる状態を作り、②', 'で後進に確実に定着させること。'],
+    blanks: ['口頭伝承', '標準化', 'OJT'],
+    blankPool: ['口頭伝承', '標準化', 'OJT', '成果主義', '多角化', '外部委託'],
+    modelAnswer: '課題は業務手順が口頭伝承に頼り属人化し、担当者不在時に業務が停滞する点。対応策は①手順書の標準化により誰でも同一品質で処理できる状態を作り、②OJTで後進に確実に定着させること。',
+  },
+  {
+    id: 'proc_c1_03', case: 'case1', title: '部門間連携の不足',
+    passage: [
+      'A社は事業拡大に伴い部門数を増やしてきたが、部門をまたぐ情報共有がほとんど行われていない。',
+      '各部門の業務範囲は固定化しており、',
+      '同じ顧客への対応が重複する例も見られる。',
+      '社長は組織全体の効率を高めたいと考えている。',
+    ],
+    issueIdx: 0,
+    issueLabel: '縦割りによる部門間連携の欠如',
+    keywordPool: ['横断的会議体', '多職種連携', '情報共有の仕組み化', '希望退職の募集', '設備投資の抑制', '値下げによる集客'],
+    keywordAnswer: ['横断的会議体', '多職種連携', '情報共有の仕組み化'],
+    questionText: 'A社の部門間連携を強化するための施策について、100字以内で助言せよ。',
+    patternAnswer: 'sesaku',
+    patternHint: '組織構造そのものを変えずとも、会議体と情報基盤で連携は作れる。効果は「重複排除」「対応の一貫性」。',
+    template: ['施策は①部門横断の', 'を定例化して各部門の状況を共有し、②顧客情報を一元管理する', 'を整備すること。効果は対応の重複が解消され、', 'による相乗効果が生まれる点。'],
+    blanks: ['会議体', '情報共有の仕組み', '多職種連携'],
+    blankPool: ['会議体', '情報共有の仕組み', '多職種連携', '成果主義制度', '生産計画', '在庫管理表'],
+    modelAnswer: '施策は①部門横断の会議体を定例化して各部門の状況を共有し、②顧客情報を一元管理する情報共有の仕組みを整備すること。効果は対応の重複が解消され、多職種連携による相乗効果が生まれる点。',
+  },
+  {
+    id: 'proc_c1_04', case: 'case1', title: '技術継承',
+    passage: [
+      'A社の製造部門は熟練工の技能に支えられてきた。',
+      '社長は今後の受注拡大に期待を寄せているが、',
+      '一方で懸念もある。',
+      '熟練工の多くが数年内に定年を迎えるが、技術の引き継ぎが進んでいない。',
+    ],
+    issueIdx: 3,
+    issueLabel: '熟練技能の継承が未着手',
+    keywordPool: ['再雇用制度', '暗黙知の継承', '世代交代のバランス', '大量生産化', '価格競争力の強化', 'EC販売の開始'],
+    keywordAnswer: ['再雇用制度', '暗黙知の継承', '世代交代のバランス'],
+    questionText: 'A社が熟練工の技能継承を進めるにあたっての留意点を、100字以内で述べよ。',
+    patternAnswer: 'ryuii',
+    patternHint: '「留意点」は施策そのものではなく、進める際に注意すべきことを理由付きで書く。',
+    template: ['留意点は①', 'で熟練工の雇用を延長しつつ、継承に十分な期間を確保すること。言語化が難しい', 'の移転には時間を要するためである。②若手への配置を計画的に進め', 'を図ることも必要である。'],
+    blanks: ['再雇用制度', '暗黙知', '世代交代のバランス'],
+    blankPool: ['再雇用制度', '暗黙知', '世代交代のバランス', '成果主義', '形式知', '価格競争力'],
+    modelAnswer: '留意点は①再雇用制度で熟練工の雇用を延長しつつ、継承に十分な期間を確保すること。言語化が難しい暗黙知の移転には時間を要するためである。②若手への配置を計画的に進め世代交代のバランスを図ることも必要である。',
+  },
+
+  // ---- 事例II マーケティング ----
+  {
+    id: 'proc_c2_01', case: 'case2', title: 'リピート率の低迷',
+    passage: [
+      'B社の来店客数自体は緩やかに増えている。',
+      'しかし2回目以降の来店につながる顧客が少なく、売上が安定しない。',
+      '顧客名簿は紙で管理されたままで、',
+      '購買履歴の分析は行われていない。',
+    ],
+    issueIdx: 1,
+    issueLabel: 'リピート率・定着率の低さ',
+    keywordPool: ['会員制度', 'CRM', 'LTVの向上', '新規出店', '生産ラインの増設', '仕入先の変更'],
+    keywordAnswer: ['会員制度', 'CRM', 'LTVの向上'],
+    questionText: 'B社が既存顧客の再来店を促すための施策について、100字以内で助言せよ。',
+    patternAnswer: 'sesaku',
+    patternHint: '事例IIの施策は「誰に・何を・どうやって」を含めると得点しやすい。効果はLTV向上に接続する。',
+    template: ['施策は①', 'を導入して購買履歴を蓄積し、②', 'により顧客ごとに好みに合う商品を提案すること。効果は再来店率が高まり', 'が向上する点。'],
+    blanks: ['会員制度', 'CRM', 'LTV'],
+    blankPool: ['会員制度', 'CRM', 'LTV', '新規出店', 'JIT', 'OEM'],
+    modelAnswer: '施策は①会員制度を導入して購買履歴を蓄積し、②CRMにより顧客ごとに好みに合う商品を提案すること。効果は再来店率が高まりLTVが向上する点。',
+  },
+  {
+    id: 'proc_c2_02', case: 'case2', title: '価格競争への巻き込まれ',
+    passage: [
+      '近隣に大型量販店が出店して以降、B社は値下げ競争に巻き込まれ利益率が低下している。',
+      'B社の商品は原材料にこだわり手作業で仕上げているが、',
+      'その点は店頭で説明されていない。',
+      '社長は価格以外の勝負に切り替えたいと考えている。',
+    ],
+    issueIdx: 0,
+    issueLabel: '価格競争による利益率低下',
+    keywordPool: ['高付加価値化', '差別化', 'ストーリー訴求', '大量仕入によるコスト削減', '営業人員の増強', '設備の自動化'],
+    keywordAnswer: ['高付加価値化', '差別化', 'ストーリー訴求'],
+    questionText: 'B社が直面する課題と、その対応策について100字以内で述べよ。',
+    patternAnswer: 'kadai',
+    patternHint: '中小企業は価格競争では勝てない。課題を「価格競争」と押さえ、対応策は必ず差別化に向ける。',
+    template: ['課題は量販店との', 'に巻き込まれ利益率が低下している点。対応策は①原材料や手作業のこだわりを', 'として発信し、②価格以外の価値で', 'を図ることで、価格比較の土俵から抜け出すこと。'],
+    blanks: ['価格競争', 'ストーリー', '差別化'],
+    blankPool: ['価格競争', 'ストーリー', '差別化', '過剰在庫', 'マニュアル', '標準化'],
+    modelAnswer: '課題は量販店との価格競争に巻き込まれ利益率が低下している点。対応策は①原材料や手作業のこだわりをストーリーとして発信し、②価格以外の価値で差別化を図ることで、価格比較の土俵から抜け出すこと。',
+  },
+  {
+    id: 'proc_c2_03', case: 'case2', title: '認知度の低さ',
+    passage: [
+      'B社の商品は品評会で高い評価を得ている。',
+      '製造工程にも自信を持っているが、',
+      'その良さが地域住民にほとんど知られておらず売上は伸び悩んでいる。',
+      '広告予算は限られている。',
+    ],
+    issueIdx: 2,
+    issueLabel: '認知度が低く価値が伝わっていない',
+    keywordPool: ['試食・体験提供', 'SNS発信', '口コミの誘発', '大幅な値下げ', '生産能力の増強', '外注比率の引上げ'],
+    keywordAnswer: ['試食・体験提供', 'SNS発信', '口コミの誘発'],
+    questionText: 'B社が地域における認知度を高めるための施策について、100字以内で助言せよ。',
+    patternAnswer: 'sesaku',
+    patternHint: '予算制約があるときは低コストのプル施策（SNS・口コミ）を軸に据える。',
+    template: ['施策は①店頭やイベントで', 'を行い商品の質を直接体感させ、②その様子を', 'で継続的に発信すること。効果は来店客の', 'により低コストで認知が地域に広がる点。'],
+    blanks: ['試食・体験提供', 'SNS', '口コミ'],
+    blankPool: ['試食・体験提供', 'SNS', '口コミ', 'マス広告', '値下げ', '外注'],
+    modelAnswer: '施策は①店頭やイベントで試食・体験提供を行い商品の質を直接体感させ、②その様子をSNSで継続的に発信すること。効果は来店客の口コミにより低コストで認知が地域に広がる点。',
+  },
+  {
+    id: 'proc_c2_04', case: 'case2', title: 'アライアンスの提案',
+    passage: [
+      '先日、地元の宿泊事業者からB社に提携の申し出があった。',
+      '共同で宿泊者向けの商品を企画したいという内容である。',
+      'B社は製造力はあるが観光客との接点を持っていない。',
+      '社長は判断に迷っている。',
+    ],
+    issueIdx: 0,
+    issueLabel: '異業種アライアンスの是非',
+    keywordPool: ['相互補完', '販路の獲得', '経営資源の分散', '自律性の醸成', '在庫回転率の改善', '段取時間の短縮'],
+    keywordAnswer: ['相互補完', '販路の獲得', '経営資源の分散'],
+    questionText: '宿泊事業者との提携について、B社にとってのメリットとデメリットを100字以内で述べよ。',
+    patternAnswer: 'merit',
+    patternHint: '「メリットとデメリット」は必ず両方書く。片方だけでは半分の得点にしかならない。',
+    template: ['メリットは①宿泊事業者の顧客基盤を通じて観光客という新たな', 'を得られ、②製造力と集客力が', 'する点。デメリットは限られた経営資源が', 'し、既存顧客への対応が手薄になる恐れがある点。'],
+    blanks: ['販路', '相互補完', '分散'],
+    blankPool: ['販路', '相互補完', '分散', '標準化', '属人化', '平準化'],
+    modelAnswer: 'メリットは①宿泊事業者の顧客基盤を通じて観光客という新たな販路を得られ、②製造力と集客力が相互補完する点。デメリットは限られた経営資源が分散し、既存顧客への対応が手薄になる恐れがある点。',
+  },
+
+  // ---- 事例III 生産・技術 ----
+  {
+    id: 'proc_c3_01', case: 'case3', title: '段取時間の長さ',
+    passage: [
+      'C社は多品種化に対応してきたが、',
+      '1日に何度も段取替えが発生し機械の停止時間が長い。',
+      'その結果、設備稼働率は同業他社を下回っている。',
+      '受注量そのものは堅調に推移している。',
+    ],
+    issueIdx: 1,
+    issueLabel: '段取替えの多発による稼働率低下',
+    keywordPool: ['内段取の外段取化', 'SMED', 'リードタイム短縮', '販路の多角化', 'ブランド構築', '権限委譲'],
+    keywordAnswer: ['内段取の外段取化', 'SMED', 'リードタイム短縮'],
+    questionText: 'C社の設備稼働率を高めるための施策について、100字以内で助言せよ。',
+    patternAnswer: 'sesaku',
+    patternHint: '段取り改善の定石は「内段取を外段取に移す」。効果は稼働率向上とリードタイム短縮の両方に及ぶ。',
+    template: ['施策は①機械停止中に行っている作業を停止前に済ませる', 'を進め、②治具の統一により段取作業自体を', 'すること。効果は設備稼働率が向上し', 'も短縮される点。'],
+    blanks: ['内段取の外段取化', '標準化', 'リードタイム'],
+    blankPool: ['内段取の外段取化', '標準化', 'リードタイム', '属人化', 'ブランド', '客単価'],
+    modelAnswer: '施策は①機械停止中に行っている作業を停止前に済ませる内段取の外段取化を進め、②治具の統一により段取作業自体を標準化すること。効果は設備稼働率が向上しリードタイムも短縮される点。',
+  },
+  {
+    id: 'proc_c3_02', case: 'case3', title: '設備の突発停止',
+    passage: [
+      'C社の生産計画は月次で立案されている。',
+      '計画自体は妥当なものだが、',
+      '主力設備の突発的な故障による停止が月に数回発生している。',
+      '結果として納期遅延が常態化しつつある。',
+    ],
+    issueIdx: 2,
+    issueLabel: '設備の突発故障による納期遅延',
+    keywordPool: ['予防保全', '定期点検', 'TPM', 'STP分析', '6次産業化', 'コンピテンシー評価'],
+    keywordAnswer: ['予防保全', '定期点検', 'TPM'],
+    questionText: 'C社の納期遅延に関する課題と、その対応策を100字以内で述べよ。',
+    patternAnswer: 'kadai',
+    patternHint: '事後保全から予防保全への転換が定石。全員参加の保全活動＝TPMまで書けると厚みが出る。',
+    template: ['課題は故障後に修理する事後保全にとどまり、突発停止が', 'を招いている点。対応策は①', 'を定めて劣化を早期に発見する', 'に転換し、②オペレーター自身が日常点検を担うTPMを導入すること。'],
+    blanks: ['納期遅延', '定期点検', '予防保全'],
+    blankPool: ['納期遅延', '定期点検', '予防保全', '在庫増加', '受入検査', '事後保全'],
+    modelAnswer: '課題は故障後に修理する事後保全にとどまり、突発停止が納期遅延を招いている点。対応策は①定期点検を定めて劣化を早期に発見する予防保全に転換し、②オペレーター自身が日常点検を担うTPMを導入すること。',
+  },
+  {
+    id: 'proc_c3_03', case: 'case3', title: 'クレームの再発',
+    passage: [
+      'C社では同種のクレームが、対策を講じた後も別のラインで再発している。',
+      '担当者はその都度の手直しで対応してきた。',
+      '品質会議は月1回開かれているが、',
+      '議題は数値報告が中心である。',
+    ],
+    issueIdx: 0,
+    issueLabel: '真因未追究によるクレーム再発',
+    keywordPool: ['原因分析', '是正処置', '横展開', '新規顧客の開拓', '段取時間の短縮', 'サブスク化'],
+    keywordAnswer: ['原因分析', '是正処置', '横展開'],
+    questionText: 'C社で同種のクレームが再発している理由を、100字以内で述べよ。',
+    patternAnswer: 'riyu',
+    patternHint: '「理由を述べよ」は原因を挙げるだけでなく、なぜそれが再発につながるのかの筋道まで書く。',
+    template: ['理由は①その都度の手直しで済ませ真因の', 'を行っていないため、同じ原因が別工程に残り続けること。②講じた', 'を他ラインへ', 'する仕組みがなく、対策が発生工程内にとどまっているためである。'],
+    blanks: ['原因分析', '是正処置', '横展開'],
+    blankPool: ['原因分析', '是正処置', '横展開', '需要予測', '外注管理', '平準化'],
+    modelAnswer: '理由は①その都度の手直しで済ませ真因の原因分析を行っていないため、同じ原因が別工程に残り続けること。②講じた是正処置を他ラインへ横展開する仕組みがなく、対策が発生工程内にとどまっているためである。',
+  },
+  {
+    id: 'proc_c3_04', case: 'case3', title: '多品種少量への対応',
+    passage: [
+      'C社の主力ラインは大量生産を前提に設計されている。',
+      '一方で顧客からの小ロット短納期の要請は年々増えている。',
+      '営業部門はこれに応えたいと考えているが、',
+      '現行のライン構成では柔軟に対応できない。',
+    ],
+    issueIdx: 3,
+    issueLabel: '多品種少量生産への対応力不足',
+    keywordPool: ['セル生産方式', '多能工化', 'フレキシビリティ', 'マス広告', '地域ブランド', '事業部制組織'],
+    keywordAnswer: ['セル生産方式', '多能工化', 'フレキシビリティ'],
+    questionText: '多品種少量生産に対応する生産方式の特徴について、100字以内で述べよ。',
+    patternAnswer: 'tokucho',
+    patternHint: '「特徴を述べよ」は仕組みの説明に加え、それが何を可能にするか（差別化要因）まで書く。',
+    template: ['特徴は①1人または少人数が複数工程を担当する', 'を採り、②作業者の', 'により工程間の仕掛や運搬を削減できる点。これにより品種切替に強い', 'を確保でき、小ロット短納期の要請に応えられる。'],
+    blanks: ['セル生産方式', '多能工化', 'フレキシビリティ'],
+    blankPool: ['セル生産方式', '多能工化', 'フレキシビリティ', 'ライン生産方式', '属人化', 'スケールメリット'],
+    modelAnswer: '特徴は①1人または少人数が複数工程を担当するセル生産方式を採り、②作業者の多能工化により工程間の仕掛や運搬を削減できる点。これにより品種切替に強いフレキシビリティを確保でき、小ロット短納期の要請に応えられる。',
+  },
+];
+
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -2320,6 +2582,7 @@ const DEFAULT_DATA = {
   signalMastery: {},   // { [swId]: { correct, wrong, streak } }
   signalBest: {},      // { attack: 最高スコア, highlight: 最高スコア }
   aiQaHistory: [],  // AI質問履歴
+  processProgress: {}, // { [probId]: { attempts, bestSteps } }  bestSteps は 0..4
 };
 
 function loadData() {
@@ -4082,7 +4345,7 @@ function PastQaPanel({ refId, history }) {
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, onSignalComplete, onSaveAiQa, pendingProblem, onClearPending }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComplete, onDrillComplete, onEssayComplete, onSaveApiKey, onSaveEssayHistory, onSignalComplete, onProcessComplete, onSaveAiQa, pendingProblem, onClearPending }) {
   const [view, setView]                   = useState('list');
   const [tabMode, setTabMode]             = useState('study');
   const [selectedCase, setSelectedCase]   = useState('case4');
@@ -4133,6 +4396,19 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onExamComple
   const [sigResults, setSigResults]       = useState([]);
   const [sigTimeLeft, setSigTimeLeft]     = useState(null);
   const sigTimerRef = useRef(null);
+  // プロセス演習
+  const [procPhase, setProcPhase]         = useState('menu');   // 'menu'|'running'|'result'
+  const [procCases, setProcCases]         = useState(['case1','case2','case3']);
+  const [procQueue, setProcQueue]         = useState([]);
+  const [procIdx, setProcIdx]             = useState(0);
+  const [procStep, setProcStep]           = useState(1);        // 1..4
+  const [procPick, setProcPick]           = useState(null);     // Step1/3: number, Step2: string[], Step4: string[]
+  const [procRevealed, setProcRevealed]   = useState(false);
+  const [procScore, setProcScore]         = useState({ correct: 0, total: 0, perfect: 0 });
+  const [procResults, setProcResults]     = useState([]);       // [{ id, steps: [bool,bool,bool,bool] }]
+  const [procStepFlags, setProcStepFlags] = useState([]);       // 現在の問題の各ステップ正誤
+  const [procFreeInput, setProcFreeInput] = useState(false);
+  const [procBlankIdx, setProcBlankIdx]   = useState(0);        // Step4 チップモードで次に埋める空欄
   // AIに質問
   const [aiQaContext, setAiQaContext]     = useState(null);
 
@@ -4421,6 +4697,92 @@ scoreは0〜10の整数。`;
   // タイマーのクリーンアップ
   useEffect(() => () => { if (sigTimerRef.current) clearInterval(sigTimerRef.current); }, []);
 
+  // ===== プロセス演習（4ステップ連鎖） =====
+
+  function buildProcessQueue(cases) {
+    const pool = PROCESS_PROBLEMS.filter(p => cases.includes(p.case));
+    return shuffleArray(pool).map(p => {
+      const wrong = shuffleArray(ANSWER_PATTERNS.filter(x => x.id !== p.patternAnswer)).slice(0, 3);
+      const patternChoices = shuffleArray([ANSWER_PATTERNS.find(x => x.id === p.patternAnswer), ...wrong]);
+      return { prob: p, patternChoices, patternCorrect: patternChoices.findIndex(x => x.id === p.patternAnswer) };
+    });
+  }
+
+  function startProcess() {
+    const queue = buildProcessQueue(procCases);
+    if (queue.length === 0) return;
+    setProcQueue(queue);
+    setProcIdx(0);
+    setProcStep(1);
+    setProcPick(null);
+    setProcRevealed(false);
+    setProcScore({ correct: 0, total: 0, perfect: 0 });
+    setProcResults([]);
+    setProcStepFlags([]);
+    setProcBlankIdx(0);
+    setProcPhase('running');
+  }
+
+  // 現在のステップの正誤を判定する
+  function judgeProcStep(item, step, pick) {
+    const p = item.prob;
+    if (step === 1) return pick === p.issueIdx;
+    if (step === 2) {
+      const a = [...(pick || [])].sort();
+      const b = [...p.keywordAnswer].sort();
+      return a.length === b.length && a.every((x, i) => x === b[i]);
+    }
+    if (step === 3) return pick === item.patternCorrect;
+    // step 4: 全空欄が順序どおり一致
+    return p.blanks.every((ans, i) => (pick?.[i] || '').trim() === ans);
+  }
+
+  // 回答を確定して正誤を表示する
+  function revealProcStep() {
+    if (procRevealed) return;
+    const item = procQueue[procIdx];
+    const ok = judgeProcStep(item, procStep, procPick);
+    setProcStepFlags(f => [...f, ok]);
+    setProcScore(s => ({ ...s, correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+    setProcRevealed(true);
+  }
+
+  // 次のステップ、または次の問題へ
+  function nextProcStep() {
+    const item = procQueue[procIdx];
+    if (procStep < 4) {
+      setProcStep(s => s + 1);
+      setProcPick(null);
+      setProcRevealed(false);
+      setProcBlankIdx(0);
+      return;
+    }
+    // 1問完了
+    const flags = procStepFlags;
+    const allOk = flags.length === 4 && flags.every(Boolean);
+    setProcResults(r => [...r, { id: item.prob.id, steps: flags }]);
+    if (allOk) setProcScore(s => ({ ...s, perfect: s.perfect + 1 }));
+    if (procIdx + 1 >= procQueue.length) { setProcPhase('result'); return; }
+    setProcIdx(i => i + 1);
+    setProcStep(1);
+    setProcPick(null);
+    setProcRevealed(false);
+    setProcStepFlags([]);
+    setProcBlankIdx(0);
+  }
+
+  // 途中終了：現在の問題までの結果で結果画面へ
+  function abortProcess() {
+    const item = procQueue[procIdx];
+    if (item && procStepFlags.length > 0) {
+      setProcResults(r => [...r, { id: item.prob.id, steps: procStepFlags }]);
+      if (procStepFlags.length === 4 && procStepFlags.every(Boolean)) {
+        setProcScore(s => ({ ...s, perfect: s.perfect + 1 }));
+      }
+    }
+    setProcPhase('result');
+  }
+
   function startExam() {
     const problems = buildExamProblems(examConfig);
     setExamProblems(problems);
@@ -4512,11 +4874,12 @@ scoreは0〜10の整数。`;
             { id: 'exam', label: '🎯 模擬試験' },
             { id: 'drill', label: '⚡ 即トレ' },
             { id: 'signal', label: '🚦 シグナル' },
+            { id: 'process', label: '🎯 プロセス' },
             { id: 'essay', label: '📝 論述' },
           ].map(m => (
             <button
               key={m.id}
-              onClick={() => { setTabMode(m.id); setCardSession(null); setExpandedTopic(null); setSigPhase('menu'); }}
+              onClick={() => { setTabMode(m.id); setCardSession(null); setExpandedTopic(null); setSigPhase('menu'); setProcPhase('menu'); }}
               style={{
                 padding: '8px 14px', borderRadius: 20, border: 'none', flexShrink: 0,
                 background: tabMode === m.id ? C.accent : C.card,
@@ -4923,6 +5286,404 @@ scoreは0〜10の整数。`;
                     </span>
                     <span style={{ flex: 1, fontSize: 12, color: C.text, lineHeight: 1.4 }}>{w.signal}</span>
                     <StarRating mastery={stars} size={12} />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* ===== プロセス演習（4ステップ連鎖） ===== */}
+        {tabMode === 'process' && (() => {
+          const caseLabelsP = { case1: '事例I', case2: '事例II', case3: '事例III' };
+          const caseColorsP = { case1: '#7c3aed', case2: '#0ea5e9', case3: '#f59e0b' };
+          const STEP_LABELS = ['課題発見', 'キーワード', '解答の型', '文章化'];
+          const progAll = data.processProgress || {};
+
+          // ---- 結果画面 ----
+          if (procPhase === 'result') {
+            const pct = procScore.total > 0 ? Math.round(procScore.correct / procScore.total * 100) : 0;
+            const gainXp = procScore.correct * 5 + procScore.perfect * 20;
+            const payload = { correct: procScore.correct, total: procScore.total, perfect: procScore.perfect, results: procResults };
+            // ステップ別の正答率（どの思考段階が弱いかを可視化）
+            const perStep = [0, 1, 2, 3].map(i => {
+              const rows = procResults.filter(r => r.steps.length > i);
+              const ok = rows.filter(r => r.steps[i]).length;
+              return { ok, total: rows.length };
+            });
+            return (
+              <div style={{ padding: '16px 0' }}>
+                <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                  <div style={{ fontSize: 44, marginBottom: 8 }}>{pct >= 80 ? '🎉' : '🎯'}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8 }}>プロセス演習 完了</div>
+                  <div style={{ fontSize: 38, fontWeight: 700, color: C.accent }}>{procScore.correct} / {procScore.total}</div>
+                  <div style={{ fontSize: 14, color: pct >= 80 ? C.green : pct >= 50 ? '#f59e0b' : C.red, fontWeight: 700, marginBottom: 6 }}>
+                    ステップ正答率 {pct}%
+                  </div>
+                  {procScore.perfect > 0 && (
+                    <div style={{ fontSize: 13, color: C.gold, marginBottom: 4 }}>🏅 全ステップ正解 {procScore.perfect}問</div>
+                  )}
+                  <div style={{ fontSize: 13, color: C.muted }}>
+                    ＋{gainXp} XP{procScore.perfect > 0 ? `（完答ボーナス +${procScore.perfect * 20}）` : ''}
+                  </div>
+                </div>
+
+                {/* 思考段階別の正答率 */}
+                <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 20, border: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>思考段階別の正答率</div>
+                  {perStep.map((s, i) => {
+                    const p = s.total > 0 ? Math.round(s.ok / s.total * 100) : 0;
+                    return (
+                      <div key={i} style={{ marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                          <span style={{ color: C.text }}>{i + 1}. {STEP_LABELS[i]}</span>
+                          <span style={{ color: p >= 80 ? C.green : p >= 50 ? '#f59e0b' : C.red, fontWeight: 700 }}>
+                            {s.ok}/{s.total}
+                          </span>
+                        </div>
+                        <div style={{ height: 4, background: C.bg, borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${p}%`, background: p >= 80 ? C.green : p >= 50 ? '#f59e0b' : C.red, transition: 'width 0.4s' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => { onProcessComplete(payload); startProcess(); }}
+                    style={{ flex: 1, padding: '14px', borderRadius: 12, border: `1px solid ${C.accent}`, background: 'transparent', color: C.accent, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+                    🔁 もう一度
+                  </button>
+                  <button onClick={() => { onProcessComplete(payload); setProcPhase('menu'); }}
+                    style={{ flex: 1, padding: '14px', borderRadius: 12, border: 'none', background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+                    結果を記録して終了
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // ---- 実行中 ----
+          if (procPhase === 'running' && procQueue.length > 0) {
+            const item = procQueue[procIdx];
+            const p = item.prob;
+            const ok = procRevealed && procStepFlags[procStepFlags.length - 1];
+            // 回答が確定できる状態か
+            const canSubmit =
+              procStep === 1 ? procPick !== null :
+              procStep === 2 ? (procPick || []).length > 0 :
+              procStep === 3 ? procPick !== null :
+                               (procPick || []).filter(x => (x || '').trim()).length === p.blanks.length;
+
+            return (
+              <div>
+                {/* ヘッダー */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <button onClick={abortProcess} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 12 }}>終了</button>
+                  <div style={{ fontSize: 13, color: C.muted }}>{procIdx + 1} / {procQueue.length}問</div>
+                  <span style={{ fontSize: 10, color: caseColorsP[p.case], fontWeight: 700 }}>{caseLabelsP[p.case]}</span>
+                </div>
+
+                {/* ステップインジケータ */}
+                <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                  {STEP_LABELS.map((label, i) => {
+                    const n = i + 1;
+                    const done = n < procStep || (n === procStep && procRevealed);
+                    const cur = n === procStep;
+                    const flag = procStepFlags[i];
+                    const col = done ? (flag ? C.green : C.red) : cur ? C.accent : C.border;
+                    return (
+                      <div key={i} style={{ flex: 1 }}>
+                        <div style={{ height: 4, background: col, borderRadius: 2, transition: 'background 0.3s' }} />
+                        <div style={{ fontSize: 9, color: cur ? C.accent : C.muted, textAlign: 'center', marginTop: 4, fontWeight: cur ? 700 : 400 }}>
+                          {n}. {label}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: '14px 0 10px' }}>{p.title}</div>
+
+                {/* ===== Step1 課題発見 ===== */}
+                {procStep === 1 && (
+                  <>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>与件文から課題を示す箇所をタップして選べ</div>
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 14px', marginBottom: 14, lineHeight: 2.2 }}>
+                      {p.passage.map((seg, i) => {
+                        let bg = 'transparent', color = C.text, bd = 'transparent';
+                        if (procRevealed) {
+                          if (i === p.issueIdx) { bg = `${C.green}25`; color = C.green; bd = C.green; }
+                          else if (i === procPick) { bg = `${C.red}25`; color = C.red; bd = C.red; }
+                          else color = C.muted;
+                        } else if (i === procPick) { bg = `${C.accent}22`; bd = C.accent; }
+                        return (
+                          <span key={i} onClick={() => !procRevealed && setProcPick(i)}
+                            style={{ background: bg, color, borderBottom: `2px solid ${bd}`, padding: '3px 2px', borderRadius: 4, cursor: procRevealed ? 'default' : 'pointer', fontSize: 14, transition: 'all 0.2s' }}>
+                            {seg}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* ===== Step2 キーワード選択 ===== */}
+                {procStep === 2 && (
+                  <>
+                    <div style={{ background: `${C.green}11`, border: `1px solid ${C.green}44`, borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, color: C.green, fontWeight: 700, marginBottom: 3 }}>特定した課題</div>
+                      <div style={{ fontSize: 13, color: C.text }}>{p.issueLabel}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
+                      この課題への解答に使うキーワードをすべて選べ（{p.keywordAnswer.length}個）
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                      {p.keywordPool.map(kw => {
+                        const sel = (procPick || []).includes(kw);
+                        const isAns = p.keywordAnswer.includes(kw);
+                        let bg = C.card, bd = C.border, color = C.text;
+                        if (procRevealed) {
+                          if (isAns) { bg = `${C.green}22`; bd = C.green; color = C.green; }
+                          else if (sel) { bg = `${C.red}22`; bd = C.red; color = C.red; }
+                          else color = C.muted;
+                        } else if (sel) { bg = `${C.accent}22`; bd = C.accent; color = C.accent; }
+                        return (
+                          <button key={kw} disabled={procRevealed}
+                            onClick={() => setProcPick(cur => {
+                              const a = cur || [];
+                              return a.includes(kw) ? a.filter(x => x !== kw) : [...a, kw];
+                            })}
+                            style={{ background: bg, border: `1px solid ${bd}`, color, borderRadius: 20, padding: '8px 14px', fontSize: 13, cursor: procRevealed ? 'default' : 'pointer', fontWeight: sel || (procRevealed && isAns) ? 700 : 400 }}>
+                            {kw}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* ===== Step3 解答の型 ===== */}
+                {procStep === 3 && (
+                  <>
+                    <div style={{ background: `linear-gradient(135deg, ${C.card}, #0d1a2e)`, border: `1px solid ${C.accent}44`, borderRadius: 12, padding: '16px 14px', marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>設問</div>
+                      <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7 }}>{p.questionText}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>この聞かれ方に対する解答の型は？</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                      {item.patternChoices.map((pat, idx) => {
+                        let bg = C.card, bd = C.border, color = C.text;
+                        if (procRevealed) {
+                          if (idx === item.patternCorrect) { bg = `${C.green}22`; bd = C.green; color = C.green; }
+                          else if (idx === procPick) { bg = `${C.red}22`; bd = C.red; color = C.red; }
+                          else color = C.muted;
+                        } else if (idx === procPick) { bg = `${C.accent}22`; bd = C.accent; color = C.accent; }
+                        return (
+                          <button key={pat.id} disabled={procRevealed} onClick={() => setProcPick(idx)}
+                            style={{ background: bg, border: `1px solid ${bd}`, borderRadius: 10, padding: '13px 14px', color, textAlign: 'left', cursor: procRevealed ? 'default' : 'pointer', fontSize: 13 }}>
+                            <div style={{ fontWeight: 700 }}>{pat.label}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>設問例: {pat.cue}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* ===== Step4 穴埋め ===== */}
+                {procStep === 4 && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, color: C.muted }}>解答を組み立てよ</span>
+                      {!procRevealed && (
+                        <button onClick={() => { setProcFreeInput(v => !v); setProcPick(null); setProcBlankIdx(0); }}
+                          style={{ background: 'none', border: `1px solid ${C.purple}44`, color: C.purple, borderRadius: 8, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>
+                          {procFreeInput ? '🔤 チップ選択に戻す' : '✏️ 手入力に切替'}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 解答文（空欄を交互に描画） */}
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 14px', marginBottom: 12, lineHeight: 2.4, fontSize: 14, color: C.text }}>
+                      {p.template.map((seg, i) => (
+                        <React.Fragment key={i}>
+                          <span>{seg}</span>
+                          {i < p.blanks.length && (() => {
+                            const val = (procPick || [])[i] || '';
+                            const isOk = procRevealed && val.trim() === p.blanks[i];
+                            if (procFreeInput && !procRevealed) {
+                              return (
+                                <input value={val}
+                                  onChange={e => setProcPick(cur => { const a = [...(cur || [])]; a[i] = e.target.value; return a; })}
+                                  style={{ width: 110, background: C.bg, border: `1px solid ${C.accent}66`, borderRadius: 6, color: C.text, fontSize: 13, padding: '3px 6px', margin: '0 3px', outline: 'none' }} />
+                              );
+                            }
+                            return (
+                              <span onClick={() => !procRevealed && !procFreeInput && setProcBlankIdx(i)}
+                                style={{
+                                  display: 'inline-block', minWidth: 84, textAlign: 'center', margin: '0 3px', padding: '2px 8px', borderRadius: 6,
+                                  background: procRevealed ? (isOk ? `${C.green}22` : `${C.red}22`) : (procBlankIdx === i ? `${C.accent}22` : C.bg),
+                                  border: `1px solid ${procRevealed ? (isOk ? C.green : C.red) : (procBlankIdx === i ? C.accent : C.border)}`,
+                                  color: procRevealed ? (isOk ? C.green : C.red) : (val ? C.text : C.muted),
+                                  cursor: procRevealed || procFreeInput ? 'default' : 'pointer', fontWeight: val ? 700 : 400,
+                                }}>
+                                {val || `［${i + 1}］`}
+                              </span>
+                            );
+                          })()}
+                        </React.Fragment>
+                      ))}
+                    </div>
+
+                    {/* チップ選択 */}
+                    {!procFreeInput && !procRevealed && (
+                      <>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>
+                          空欄［{procBlankIdx + 1}］に入る語を選択
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                          {p.blankPool.map(w => (
+                            <button key={w}
+                              onClick={() => setProcPick(cur => {
+                                const a = [...(cur || [])];
+                                a[procBlankIdx] = w;
+                                return a;
+                              })}
+                              style={{ background: C.card, border: `1px solid ${C.border}`, color: C.text, borderRadius: 20, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}>
+                              {w}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {/* ===== 正誤フィードバック ===== */}
+                {procRevealed && (
+                  <div style={{ background: ok ? `${C.green}11` : `${C.red}11`, border: `1px solid ${ok ? C.green : C.red}44`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: ok ? C.green : C.red, marginBottom: 6 }}>
+                      {ok ? '✓ 正解' : '✗ 不正解'}
+                    </div>
+                    {procStep === 1 && <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>課題は「{p.issueLabel}」。該当箇所は緑で示した部分。</div>}
+                    {procStep === 2 && <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>正解キーワード: {p.keywordAnswer.join('・')}</div>}
+                    {procStep === 3 && (
+                      <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
+                        <div style={{ marginBottom: 4 }}>正しい型: {ANSWER_PATTERNS.find(x => x.id === p.patternAnswer)?.label}</div>
+                        <div style={{ color: '#c4b5fd' }}>💡 {p.patternHint}</div>
+                      </div>
+                    )}
+                    {procStep === 4 && (
+                      <div style={{ background: '#0a1a0a', borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.green}44` }}>
+                        <div style={{ fontSize: 11, color: C.green, fontWeight: 700, marginBottom: 4 }}>📄 模範解答</div>
+                        <div style={{ fontSize: 13, color: '#86efac', lineHeight: 1.8 }}>{p.modelAnswer}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ===== アクション ===== */}
+                {!procRevealed ? (
+                  <button onClick={revealProcStep} disabled={!canSubmit}
+                    style={{
+                      width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+                      background: canSubmit ? C.accent : C.card, color: canSubmit ? '#000' : C.muted,
+                      fontWeight: 700, cursor: canSubmit ? 'pointer' : 'default', fontSize: 15,
+                    }}>
+                    決定
+                  </button>
+                ) : (
+                  <>
+                    <PastQaPanel refId={`${p.id}_s${procStep}`} history={data.aiQaHistory} />
+                    <button
+                      onClick={() => setAiQaContext({
+                        source: 'プロセス',
+                        refId: `${p.id}_s${procStep}`,
+                        wasCorrect: !!ok,
+                        questionText: procStep === 3 ? p.questionText : `${p.title}（${STEP_LABELS[procStep - 1]}）`,
+                        myAnswer:
+                          procStep === 1 ? (p.passage[procPick] ?? '') :
+                          procStep === 2 ? (procPick || []).join('・') :
+                          procStep === 3 ? (item.patternChoices[procPick]?.label ?? '') :
+                                           (procPick || []).join('／'),
+                        correctAnswer:
+                          procStep === 1 ? p.passage[p.issueIdx] :
+                          procStep === 2 ? p.keywordAnswer.join('・') :
+                          procStep === 3 ? (ANSWER_PATTERNS.find(x => x.id === p.patternAnswer)?.label ?? '') :
+                                           p.blanks.join('／'),
+                        explanation: procStep === 3 ? p.patternHint : (procStep === 4 ? p.modelAnswer : p.issueLabel),
+                      })}
+                      style={{ background: C.purple + '22', border: `1px solid ${C.purple}44`, color: C.purple, borderRadius: 10, width: '100%', padding: 10, fontSize: 13, marginBottom: 10, cursor: 'pointer' }}>
+                      🤖 AIに質問
+                    </button>
+                    <button onClick={nextProcStep}
+                      style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 15 }}>
+                      {procStep < 4 ? `次へ → ${STEP_LABELS[procStep]}` : (procIdx + 1 >= procQueue.length ? '結果を見る' : '次の問題 →')}
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          }
+
+          // ---- メニュー ----
+          const poolP = PROCESS_PROBLEMS.filter(p => procCases.includes(p.case));
+          const fullDone = PROCESS_PROBLEMS.filter(p => (progAll[p.id]?.bestSteps || 0) >= 4).length;
+
+          return (
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>🎯 プロセス演習</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+                課題発見 → キーワード想起 → 解答の型 → 文章化。本試験の思考順序を1問で通す
+              </div>
+
+              <div style={{ background: C.card, borderRadius: 12, padding: '14px 16px', marginBottom: 16, border: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: C.muted }}>全4ステップ完答済み</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>{fullDone} / {PROCESS_PROBLEMS.length}</span>
+                </div>
+                <div style={{ height: 6, background: C.bg, borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${(fullDone / PROCESS_PROBLEMS.length) * 100}%`, background: `linear-gradient(90deg, ${C.orange}, ${C.gold})`, transition: 'width 0.4s' }} />
+                </div>
+              </div>
+
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>出題範囲</div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+                {Object.entries(caseLabelsP).map(([cid, label]) => {
+                  const on = procCases.includes(cid);
+                  return (
+                    <button key={cid}
+                      onClick={() => setProcCases(cs => on ? (cs.length > 1 ? cs.filter(x => x !== cid) : cs) : [...cs, cid])}
+                      style={{
+                        padding: '7px 14px', borderRadius: 20, border: `1px solid ${on ? caseColorsP[cid] : C.border}`,
+                        background: on ? `${caseColorsP[cid]}22` : 'transparent', color: on ? caseColorsP[cid] : C.muted,
+                        fontWeight: on ? 700 : 400, cursor: 'pointer', fontSize: 12,
+                      }}>{on ? '✓ ' : ''}{label}</button>
+                  );
+                })}
+                <span style={{ fontSize: 11, color: C.muted, alignSelf: 'center', marginLeft: 4 }}>{poolP.length}問</span>
+              </div>
+
+              <button onClick={startProcess}
+                style={{ width: '100%', padding: '16px', borderRadius: 14, border: 'none', background: `linear-gradient(135deg, ${C.purple}, ${C.accent})`, color: '#000', fontWeight: 700, fontSize: 16, cursor: 'pointer', marginBottom: 20 }}>
+                🎯 プロセス演習を開始（{poolP.length}問）
+              </button>
+
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>到達ステップ一覧</div>
+              {poolP.map(p => {
+                const best = progAll[p.id]?.bestSteps || 0;
+                return (
+                  <div key={p.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, background: C.card, borderRadius: 10,
+                    padding: '10px 12px', marginBottom: 6, border: `1px solid ${best >= 4 ? C.gold + '44' : C.border}`,
+                  }}>
+                    <span style={{ fontSize: 10, color: caseColorsP[p.case], fontWeight: 700, flexShrink: 0, width: 42 }}>{caseLabelsP[p.case]}</span>
+                    <span style={{ flex: 1, fontSize: 12, color: C.text }}>{p.title}</span>
+                    <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+                      {[0, 1, 2, 3].map(i => (
+                        <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i < best ? C.green : '#334155', display: 'inline-block' }} />
+                      ))}
+                    </span>
                   </div>
                 );
               })}
@@ -5870,6 +6631,15 @@ scoreは0〜10の整数。`;
           })}
         </div>
         </>}
+
+        {aiQaContext && (
+          <AiQuestionModal
+            context={aiQaContext}
+            apiKey={data.geminiApiKey || ''}
+            onSave={(qa) => { onSaveAiQa({ ...aiQaContext, ...qa }); setAiQaContext(null); }}
+            onClose={() => setAiQaContext(null)}
+          />
+        )}
       </div>
     );
   }
@@ -6542,6 +7312,36 @@ export default function App() {
     setParticles(xp);
   }
 
+  // プロセス演習：到達ステップの更新＋XP付与
+  function handleProcessComplete({ correct, total, perfect, results }) {
+    let d = { ...data };
+    const prog = { ...(d.processProgress || {}) };
+    (results || []).forEach(r => {
+      const okCount = r.steps.filter(Boolean).length;
+      const prev = prog[r.id] || { attempts: 0, bestSteps: 0 };
+      prog[r.id] = { attempts: prev.attempts + 1, bestSteps: Math.max(prev.bestSteps, okCount) };
+    });
+    d.processProgress = prog;
+
+    // XP：1ステップ正解5XP ＋ 全4ステップ正解の問題ごとに +20XP
+    const xp = correct * 5 + perfect * 20;
+    if (xp <= 0) { commit(d); return; }
+
+    const prevLevel = getLevel(d.xp);
+    const hi = buildHistoryItem('🎯', `プロセス演習 ${correct}/${total}ステップ`, xp);
+    d = applyXpGain(d, xp, hi);
+    commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
+    setReward({
+      icon: perfect > 0 ? '🏅' : '🎯',
+      title: 'プロセス演習完了！',
+      xp,
+      message: perfect > 0 ? `${correct}/${total}ステップ・完答${perfect}問！` : `${correct}/${total}ステップ正解`,
+    });
+    setParticles(xp);
+  }
+
   function handleDrillComplete(correctCount) {
     const xp = correctCount * 5;
     if (xp <= 0) return;
@@ -6740,6 +7540,7 @@ export default function App() {
           onSaveApiKey={handleSaveApiKey}
           onSaveEssayHistory={handleSaveEssayHistory}
           onSignalComplete={handleSignalComplete}
+          onProcessComplete={handleProcessComplete}
           onSaveAiQa={handleSaveAiQa}
           pendingProblem={pendingProblem}
           onClearPending={() => setPendingProblem(null)}
