@@ -2056,6 +2056,225 @@ const FINANCE_PROBLEMS = [
       },
     ],
   },
+  {
+    id: 'cashflow_flow_04', type: 'cashflow', title: '投資キャッシュフロー：どこまでが投資活動か', icon: '🏗️',
+    xp: 70, partialXp: 14, difficulty: '基礎',
+    intro: '同じ企業の投資活動を見る。有形固定資産の取得400、有形固定資産の売却収入180（売却益60を含む）、投資有価証券の取得150、貸付金の回収50（単位：万円）。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】固定資産を売却した。投資CFに計上する金額はどれか。',
+        choices: [
+          '＋180万円　（実際に入金された売却収入の全額）',
+          '＋60万円　（売却益の分だけ）',
+          '＋120万円　（帳簿価額の分だけ）',
+          '計上しない　（営業CFで売却益を処理済みだから）',
+        ],
+        correct: 0,
+        explanation: '投資CFに載るのは入金額そのもの。営業CFで売却益60を引いたのは、この180を投資CFで丸ごと計上するため。「営業で消して、投資で実額」という組み合わせになっている。',
+      },
+      {
+        id: 2, question: '【Step 2】有形固定資産の取得による支出400はどう計上するか。',
+        choices: [
+          '−400万円　（投資活動によるキャッシュ・フロー）',
+          '−400万円　（営業活動によるキャッシュ・フロー）',
+          '−400万円　（財務活動によるキャッシュ・フロー）',
+          '減価償却費として営業CFで按分する',
+        ],
+        correct: 0,
+        explanation: '設備投資の支出は買った期に全額が投資CFへ。営業CFで足し戻す減価償却費は、この支出を後の期に配分した会計上の費用にすぎない。',
+      },
+      {
+        id: 3, question: '【Step 3】投資有価証券の取得による支出150はどの区分か。',
+        choices: [
+          '−150万円　（投資活動）',
+          '−150万円　（財務活動）',
+          '−150万円　（営業活動）',
+          '区分不要　（有価証券は現金同等物だから）',
+        ],
+        correct: 0,
+        explanation: '余資運用のための有価証券の売買は投資活動。ただし取得日から3か月以内に満期が来るものは現金同等物として扱い、CF計算書の増減には含めない。',
+      },
+      {
+        id: 4, question: '【Step 4】貸付金の回収による収入50はどの区分か。',
+        choices: [
+          '＋50万円　（投資活動／お金を貸すのは投資）',
+          '＋50万円　（財務活動／資金のやりとりだから）',
+          '＋50万円　（営業活動／売上債権の回収と同じ）',
+          '＋50万円　（借入金の返済と相殺する）',
+        ],
+        correct: 0,
+        explanation: '「貸す」は投資活動、「借りる」は財務活動。方向が逆になるのでいちばん引っかかりやすい。貸付けの支出は−、回収は＋。',
+      },
+      {
+        id: 5, question: '【Step 5】投資活動によるキャッシュ・フローの合計は。',
+        choices: [
+          '−320万円　（−400　＋180　−150　＋50）',
+          '−440万円　（−400　＋60　−150　＋50）',
+          '＋780万円　（すべて加算）',
+          '−500万円　（−400　−150　＋50）',
+        ],
+        correct: 0,
+        explanation: '−400と−150で−550、＋180と＋50で＋230。差引−320万円。売却は益60ではなく収入180で入れるのを忘れないこと。',
+      },
+      {
+        id: 6, question: '【Step 6】投資CFがマイナスであることを、2次試験ではどう読むか。',
+        choices: [
+          '設備投資を続けている状態であり、それ自体は問題ではない',
+          '資金が流出しており、ただちに危険信号である',
+          '本業が赤字であることを意味する',
+          '借入返済が進んでいることを意味する',
+        ],
+        correct: 0,
+        explanation: '成長段階の企業は投資CFがマイナスになるのが普通。むしろ営業CFで賄えているか（フリーCFが正か）を見る。投資CFがプラスの場合は資産売却で食いつないでいる可能性を疑う。',
+      },
+    ],
+  },
+  {
+    id: 'cashflow_flow_05', type: 'cashflow', title: '財務キャッシュフロー：調達と返済を読む', icon: '🏦',
+    xp: 70, partialXp: 14, difficulty: '基礎',
+    intro: '同じ企業の財務活動。長期借入れによる収入300、借入金の返済による支出250、株式の発行による収入100、配当金の支払額80（単位：万円）。区分の境目を確認する。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】長期借入れによる収入300はどの区分か。',
+        choices: [
+          '＋300万円　（財務活動／外部から資金を調達した）',
+          '＋300万円　（投資活動／長期の取引だから）',
+          '＋300万円　（営業活動／運転資金に使うから）',
+          '収益ではないので計上しない',
+        ],
+        correct: 0,
+        explanation: '財務CFは「資金をどう集めて、どう返したか」。借入・社債・増資が入口、返済・配当が出口。使い道が運転資金でも区分は変わらない。',
+      },
+      {
+        id: 2, question: '【Step 2】借入金の返済による支出250はどう計上するか。',
+        choices: [
+          '−250万円　（財務活動）',
+          '＋250万円　（負債が減るのでプラス）',
+          '−250万円　（営業活動／運転資本の負債減少と同じ）',
+          '借入300と相殺して＋50万円だけ計上する',
+        ],
+        correct: 0,
+        explanation: '借入と返済は相殺せず、収入と支出を総額で並べるのが原則。相殺すると資金繰りの実態が見えなくなる。',
+      },
+      {
+        id: 3, question: '【Step 3】株式の発行による収入100はどの区分か。',
+        choices: [
+          '＋100万円　（財務活動）',
+          '＋100万円　（投資活動）',
+          '計上しない　（資本取引でありCFではない）',
+          '＋100万円　（営業活動）',
+        ],
+        correct: 0,
+        explanation: '増資は現金が実際に入ってくる資金調達なので財務CF。損益には出てこないがキャッシュは動く、間接法の考え方がそのまま効く場面。',
+      },
+      {
+        id: 4, question: '【Step 4】配当金の支払額80はどの区分か。',
+        choices: [
+          '−80万円　（財務活動／株主への資金の払い戻し）',
+          '−80万円　（営業活動の小計より下／受取配当金と同じ扱い）',
+          '−80万円　（投資活動）',
+          '計上しない　（利益処分だから）',
+        ],
+        correct: 0,
+        explanation: 'ここが最頻出の混乱ポイント。受取配当金は営業CF、支払配当金は財務CF。もらうのと払うのとで区分が違うので、セットで覚える。',
+      },
+      {
+        id: 5, question: '【Step 5】利息の支払額35は、この問題ではどこに載っているか。',
+        choices: [
+          '営業活動の小計より下（受取利息とセットで営業CFに入れる方法）',
+          '財務活動（借入に伴う支出だから）',
+          '投資活動',
+          'どこにも載せない',
+        ],
+        correct: 0,
+        explanation: '利息の支払は「営業CFの小計の下」か「財務CF」かの選択適用が認められている。試験では前者が基本。配当金の支払だけは常に財務CFに入るので混同しないこと。',
+      },
+      {
+        id: 6, question: '【Step 6】財務活動によるキャッシュ・フローの合計は。',
+        choices: [
+          '＋70万円　（＋300　−250　＋100　−80）',
+          '＋470万円　（＋300　＋250　＋100　−80）',
+          '−130万円　（−300　＋250　−100　＋80）',
+          '＋50万円　（＋300　−250）',
+        ],
+        correct: 0,
+        explanation: '＋300と＋100で＋400、−250と−80で−330。差引＋70万円。調達がやや返済を上回っている状態。',
+      },
+    ],
+  },
+  {
+    id: 'cashflow_flow_06', type: 'cashflow', title: '3区分をつなぐ：期末の現金残高まで', icon: '🔗',
+    xp: 100, partialXp: 18, difficulty: '応用',
+    intro: '営業CF 695、投資CF −320、財務CF ＋70、現金及び現金同等物の期首残高500（単位：万円）。3つの区分を1枚につないで、CF計算書の読み方まで確認する。',
+    steps: [
+      {
+        id: 1, question: '【Step 1】現金及び現金同等物の増加額はいくらか。',
+        choices: [
+          '＋445万円　（695　−320　＋70）',
+          '＋1,085万円　（695　＋320　＋70）',
+          '＋305万円　（695　−320　−70）',
+          '＋375万円　（695　−320）',
+        ],
+        correct: 0,
+        explanation: '3区分をそのまま足すだけ。695−320＝375、＋70で445万円。ここで符号を間違えるのは投資CFをプラスで足してしまうケースが大半。',
+      },
+      {
+        id: 2, question: '【Step 2】現金及び現金同等物の期末残高はいくらか。',
+        choices: [
+          '945万円　（期首500　＋増加額445）',
+          '445万円　（増加額がそのまま期末残高）',
+          '55万円　（期首500　−445）',
+          '1,195万円　（期首500　＋695）',
+        ],
+        correct: 0,
+        explanation: '期首残高＋増加額＝期末残高。この期末残高は貸借対照表の現金及び預金と整合するので、検算に使える。',
+      },
+      {
+        id: 3, question: '【Step 3】固定資産の売却が営業CFと投資CFの両方に登場した。その理由は。',
+        choices: [
+          '営業CFで売却益60を取り消し、投資CFで入金額180を計上するため',
+          '売却は重要な取引なので2か所に記載する決まりだから',
+          '営業CFでは簿価、投資CFでは時価を記載するため',
+          '記載の誤りであり、本来は投資CFだけでよい',
+        ],
+        correct: 0,
+        explanation: '税引前利益には売却益60が混ざっている。これを消さないと、投資CFの180と合わせて二重計上になる。「上で消して、下で実額」は利息とまったく同じ発想。',
+      },
+      {
+        id: 4, question: '【Step 4】配当金について、区分の扱いが正しいのはどれか。',
+        choices: [
+          '受取配当金は営業CF、支払配当金は財務CF',
+          '受取配当金も支払配当金も財務CF',
+          '受取配当金は投資CF、支払配当金は財務CF',
+          '受取配当金も支払配当金も営業CF',
+        ],
+        correct: 0,
+        explanation: 'もらうのは営業CFの小計の下、払うのは財務CF。「利息は受取・支払とも営業CF、配当は受取が営業で支払が財務」と一組で覚えると崩れにくい。',
+      },
+      {
+        id: 5, question: '【Step 5】営業CFがプラス、投資CFがマイナス、財務CFがプラス。この企業の状態として最も適切な読み方は。',
+        choices: [
+          '本業で稼ぎつつ外部調達も併用して投資を進めている、成長局面',
+          '本業が行き詰まり資産売却で延命している状態',
+          '投資を絞って借入返済を優先している、縮小局面',
+          '無借金経営で現金を積み上げている状態',
+        ],
+        correct: 0,
+        explanation: '営業CF＋・投資CF−・財務CF＋は、稼ぎに調達を上乗せして投資している典型的な成長パターン。2次試験では3つの符号の組み合わせから局面を言語化させる問われ方をする。',
+      },
+      {
+        id: 6, question: '【Step 6】逆に、営業CFがマイナスで財務CFが大きくプラスの企業をどう読むか。',
+        choices: [
+          '本業の資金不足を借入で埋めている状態で、資金繰りの悪化を疑う',
+          '積極的に設備投資している健全な成長企業である',
+          '配当を厚く支払っている株主重視の企業である',
+          '在庫を圧縮して現金を回収している状態である',
+        ],
+        correct: 0,
+        explanation: '本業が現金を生めていないのに外部調達で穴埋めしている形。黒字でも営業CFがマイナスなら黒字倒産の入口で、助言問題では回収条件の見直しや在庫圧縮が定番の方向になる。',
+      },
+    ],
+  },
   // ===== 応用問題 =====
   {
     id: 'cvp_adv_01', type: 'cvp', title: '特殊注文の受否判断（増分分析）', icon: '📋',
@@ -2556,6 +2775,7 @@ const DEFAULT_DATA = {
   notes: [],
   financeProgress: {},
   caseProgress: {},
+  drillProgress: {},
   dailyLog: {},
   procedureCase:    null,
   procedureChecked: [],
@@ -3698,7 +3918,639 @@ function HistoryTab({ data }) {
 // FinanceTab
 // ============================================================
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
+// ============================================================
+// 間接法CFドリル（思考フロー式・数値ランダム）
+// ============================================================
+
+const CF_SEC = { op: C.accent, inv: C.purple, fin: C.orange };
+
+function cfRnd(min, max, step) {
+  return min + Math.floor(Math.random() * ((max - min) / step + 1)) * step;
+}
+
+function cfSigned(n) {
+  return (n < 0 ? '−' : '＋') + Math.abs(n).toLocaleString();
+}
+
+function cfShuffle(opts) {
+  const a = opts.map(o => ({ ...o }));
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function buildCfCase() {
+  const c = {
+    pretax:  cfRnd(700, 1600, 50),
+    dep:     cfRnd(100, 300, 10),
+    allow:   cfRnd(10, 60, 5),
+    gain:    cfRnd(30, 90, 10),
+    intExp:  cfRnd(20, 60, 5),
+    intInc:  cfRnd(5, 25, 5),
+    ar:      cfRnd(80, 200, 10),
+    inv:     cfRnd(30, 90, 10),
+    ap:      cfRnd(20, 80, 10),
+    tax:     cfRnd(120, 260, 10),
+    buyFix:  cfRnd(300, 600, 50),
+    bookVal: cfRnd(80, 200, 10),
+    buySec:  cfRnd(50, 200, 50),
+    lendBk:  cfRnd(30, 100, 10),
+    borrow:  cfRnd(200, 500, 50),
+    repay:   cfRnd(100, 400, 50),
+    issue:   cfRnd(50, 200, 50),
+    divPaid: cfRnd(30, 150, 10),
+    opening: cfRnd(300, 800, 50),
+  };
+  c.intPaid  = c.intExp - 5;
+  c.intRecv  = c.intInc;
+  c.sellFix  = c.bookVal + c.gain;
+  return c;
+}
+
+function buildCfSteps(c, mode) {
+  const s = [];
+  const push = (o) => s.push({ sec: 'op', ...o, qs: (o.qs || []).map(q => ({ ...q, opts: cfShuffle(q.opts) })) });
+
+  push({ name: '営業活動によるキャッシュ・フロー', kind: 'sec', auto: true, amt: 0, sign: 1 });
+
+  push({ name: '税引前当期純利益', amt: c.pretax, sign: 1, kind: 'head', qs: [
+    { step: '出発点', q: '間接法はどの利益から出発するか。',
+      opts: [
+        { t: '税引前当期純利益', ok: true },
+        { t: '当期純利益（税引後）' },
+        { t: '営業利益' },
+        { t: '売上高' }],
+      why: '法人税は小計の下で「実際に支払った額」として別に引く。だから上は税引前から始める。' }] });
+
+  push({ name: '減価償却費', amt: c.dep, sign: 1, qs: [
+    { step: '1／2　現金は動いたか', q: '減価償却費を計上したとき、当期の現金は出ていったか。',
+      opts: [
+        { t: '出ていっていない（過去の支出を配分しただけ）', ok: true },
+        { t: '当期に出ていった' },
+        { t: '半分だけ出ていった' }],
+      why: '支出はモノを買った期に済んでいる。当期は帳簿上の費用だけが立っている。' },
+    { step: '2／2　符号', q: 'では税引前利益にどう調整するか。',
+      opts: [
+        { t: '足し戻す（＋）', ok: true },
+        { t: '差し引く（−）' }],
+      why: '利益の計算で引かれているだけで現金は減っていないので、そのまま足して戻す。' }] });
+
+  push({ name: '貸倒引当金の増加額', amt: c.allow, sign: 1, qs: [
+    { step: '1／2　現金は動いたか', q: '引当金の繰入で現金は動いたか。',
+      opts: [
+        { t: '動いていない（将来の損失の見積り）', ok: true },
+        { t: '動いた' }],
+      why: '減価償却と同じ非資金費用の仲間。退職給付引当金や賞与引当金も同じ扱い。' },
+    { step: '2／2　符号', q: '引当金が「増加」したときの符号は。',
+      opts: [
+        { t: '足し戻す（＋）', ok: true },
+        { t: '差し引く（−）' }],
+      why: '増加＝その分費用が立った＝現金は出ていない。減少なら逆に−。' }] });
+
+  push({ name: '固定資産売却益', amt: c.gain, sign: -1, qs: [
+    { step: '1／2　どの活動か', q: 'この利益はどの活動から生まれたものか。',
+      opts: [
+        { t: '投資活動（資産を売った）', ok: true },
+        { t: '営業活動（本業のもうけ）' },
+        { t: '財務活動（資金の回収）' }],
+      why: '売却代金は全額が投資CFに入る。営業CFに利益を残すと二重計上になる。' },
+    { step: '2／2　符号', q: '営業CFの中ではどう扱うか。',
+      opts: [
+        { t: '差し引く（−）／利益に含まれている分を取り消す', ok: true },
+        { t: '足す（＋）／もうけだから' },
+        { t: '調整しない／投資CFだけで処理する' }],
+      why: '税引前利益にプラスで入っているので引いて消す。売却損なら逆に＋。' }] });
+
+  push({ name: '支払利息', amt: c.intExp, sign: 1, qs: [
+    { step: '1／3　現状', q: '支払利息は、税引前当期純利益の計算ですでにどうなっているか。',
+      opts: [
+        { t: '営業外費用として引かれている', ok: true },
+        { t: 'まだ何も反映されていない' },
+        { t: '営業外収益として加算されている' }],
+      why: '出発点は、支払利息を引いたあとの数字。ここを押さえないと符号が決められない。' },
+    { step: '2／3　置き場所', q: '利息の金額は、営業CFのどこで確定させるルールか。',
+      opts: [
+        { t: '小計より下で、実際に支払った額として計上する', ok: true },
+        { t: '小計より上に、PLの発生額のまま置いておく' },
+        { t: '営業CFには載せず、財務CFだけに載せる' }],
+      why: '利息と法人税は発生額ではなく実際の収支額で、小計の下に並べる。これがすべての起点。' },
+    { step: '3／3　符号', q: 'だから小計より上ではどうするか。',
+      opts: [
+        { t: 'いったん足し戻す（＋）', ok: true },
+        { t: 'もう一度引く（−）' },
+        { t: '何もしない' }],
+      why: '「上でキャンセル → 下で実額」の二段構え。受取利息はこの逆になる。' }] });
+
+  push({ name: '受取利息・受取配当金', amt: c.intInc, sign: -1, qs: [
+    { step: '符号', q: '支払利息の逆に考える。小計より上ではどうするか。',
+      opts: [
+        { t: '差し引く（−）／下で実際の受取額を出すから', ok: true },
+        { t: '足す（＋）／収入だから' },
+        { t: '調整しない' }],
+      why: '税引前利益にプラスで入っている分を消す。下で受取額を＋で計上する。' }] });
+
+  push({ name: '売上債権の増加額', amt: c.ar, sign: -1, qs: [
+    { step: '1／2　意味', q: '売上債権が増えたということは、何が起きているか。',
+      opts: [
+        { t: '売上は立ったが、まだ現金を回収していない', ok: true },
+        { t: '現金がその分入ってきた' },
+        { t: '値引きをして売上が減った' }],
+      why: '利益には乗っているのに、現金は手元にない状態。' },
+    { step: '2／2　符号', q: '符号は。',
+      opts: [
+        { t: '差し引く（−）', ok: true },
+        { t: '足す（＋）' }],
+      why: '運転資本の合言葉は「資産が増えたら−、負債が増えたら＋」。' }] });
+
+  push({ name: '棚卸資産の減少額', amt: c.inv, sign: 1, qs: [
+    { step: '符号', q: '棚卸資産が「減った」ときはどうするか。',
+      opts: [
+        { t: '足す（＋）／在庫が現金化された', ok: true },
+        { t: '差し引く（−）／資産だから' },
+        { t: '調整しない／売上原価で処理済み' }],
+      why: '資産は増加なら−、減少なら＋。項目名で反射せず、必ず増減を先に読むこと。' }] });
+
+  push({ name: '仕入債務の増加額', amt: c.ap, sign: 1, qs: [
+    { step: '符号', q: '仕入債務が増えた状態をどう調整するか。',
+      opts: [
+        { t: '足す（＋）／仕入れたがまだ支払っていない', ok: true },
+        { t: '差し引く（−）／支払義務が増えたから' },
+        { t: '調整しない／負債は営業CFに無関係' }],
+      why: '費用は計上済みなのに現金は手元に残っている。支払いを先送りした分だけ＋。' }] });
+
+  push({ name: '小　計', amt: 0, sign: 1, kind: 'sub', qs: [
+    { step: 'チェックポイント', q: '小計より下に並ぶのは、次のうちどれか。',
+      opts: [
+        { t: '利息・配当金の受取額、利息の支払額、法人税等の支払額', ok: true },
+        { t: '減価償却費と引当金の増加額' },
+        { t: '売上債権・棚卸資産・仕入債務の増減' },
+        { t: '固定資産の取得支出と売却収入' }],
+      why: '下に来るのはこの3つだけ。しかも全部「実際に動いた現金」。' }] });
+
+  push({ name: '利息・配当金の受取額', amt: c.intRecv, sign: 1, qs: [
+    { step: '符号', q: '符号は。',
+      opts: [
+        { t: '足す（＋）', ok: true },
+        { t: '差し引く（−）' }],
+      why: '実際に受け取った現金なので素直に＋。' }] });
+
+  push({ name: '利息の支払額', amt: c.intPaid, sign: -1, qs: [
+    { step: '1／2　なぜ違うか', q: '上で足し戻した支払利息 ' + c.intExp.toLocaleString() + ' と、この支払額 ' + c.intPaid.toLocaleString() + ' が一致しないのはなぜか。',
+      opts: [
+        { t: '未払利息があり、発生額と支払額がずれるから', ok: true },
+        { t: 'どちらかが計算ミスだから' },
+        { t: '受取利息と相殺されているから' }],
+      why: '発生主義のPLと現金主義のCFの差。だからこそ上でキャンセルし、下で実額を出す必要がある。' },
+    { step: '2／2　符号', q: '符号は。',
+      opts: [
+        { t: '差し引く（−）', ok: true },
+        { t: '足す（＋）' }],
+      why: '現金が出ていったので−。' }] });
+
+  push({ name: '法人税等の支払額', amt: c.tax, sign: -1, qs: [
+    { step: '符号', q: '符号は。',
+      opts: [
+        { t: '差し引く（−）', ok: true },
+        { t: '足す（＋）' }],
+      why: '税引前から出発した分を、ここで実際の納付額として引いて締める。' }] });
+
+  push({ name: '営業活動によるキャッシュ・フロー', kind: 'total', auto: true, amt: 0, sign: 1 });
+
+  if (mode === 'op') return s;
+
+  const pushI = (o) => s.push({ sec: 'inv', ...o, qs: (o.qs || []).map(q => ({ ...q, opts: cfShuffle(q.opts) })) });
+
+  pushI({ name: '投資活動によるキャッシュ・フロー', kind: 'sec', auto: true, amt: 0, sign: 1 });
+
+  pushI({ name: '有形固定資産の取得による支出', amt: c.buyFix, sign: -1, qs: [
+    { step: '符号', q: '設備投資の支出をどう計上するか。',
+      opts: [
+        { t: '差し引く（−）／投資活動', ok: true },
+        { t: '差し引く（−）／営業活動' },
+        { t: '減価償却費として営業CFに配分する' },
+        { t: '差し引く（−）／財務活動' }],
+      why: '買った期に全額が投資CFへ。営業CFで足し戻す減価償却費は、この支出を後の期に配分した会計上の費用にすぎない。' }] });
+
+  pushI({ name: '有形固定資産の売却による収入', amt: c.sellFix, sign: 1, qs: [
+    { step: '1／2　いくら載せるか', q: '簿価 ' + c.bookVal.toLocaleString() + ' の資産を売り、売却益 ' + c.gain.toLocaleString() + ' が出た。投資CFに計上する金額は。',
+      opts: [
+        { t: c.sellFix.toLocaleString() + '（実際に入金された売却収入の全額）', ok: true },
+        { t: c.gain.toLocaleString() + '（売却益の分だけ）' },
+        { t: c.bookVal.toLocaleString() + '（帳簿価額の分だけ）' },
+        { t: '計上しない（営業CFで売却益を処理済み）' }],
+      why: '投資CFに載るのは入金額そのもの。営業CFで売却益を引いたのは、ここで全額を計上するため。' },
+    { step: '2／2　符号', q: '符号は。',
+      opts: [
+        { t: '足す（＋）', ok: true },
+        { t: '差し引く（−）' }],
+      why: '現金が入ってきたので＋。' }] });
+
+  pushI({ name: '投資有価証券の取得による支出', amt: c.buySec, sign: -1, qs: [
+    { step: '区分', q: 'この支出はどの区分か。',
+      opts: [
+        { t: '投資活動（−）', ok: true },
+        { t: '財務活動（−）' },
+        { t: '営業活動（−）' },
+        { t: '現金同等物なので増減に含めない' }],
+      why: '余資運用の有価証券売買は投資活動。ただし取得日から3か月以内に満期が来るものは現金同等物として扱う。' }] });
+
+  pushI({ name: '貸付金の回収による収入', amt: c.lendBk, sign: 1, qs: [
+    { step: '区分', q: '貸付金の回収はどの区分か。',
+      opts: [
+        { t: '投資活動（＋）／貸すのは投資', ok: true },
+        { t: '財務活動（＋）／資金のやりとりだから' },
+        { t: '営業活動（＋）／債権の回収だから' },
+        { t: '借入金の返済と相殺する' }],
+      why: '「貸す」は投資活動、「借りる」は財務活動。方向が逆になるので最も引っかかりやすい。' }] });
+
+  pushI({ name: '投資活動によるキャッシュ・フロー', kind: 'total', auto: true, amt: 0, sign: 1 });
+
+  const pushF = (o) => s.push({ sec: 'fin', ...o, qs: (o.qs || []).map(q => ({ ...q, opts: cfShuffle(q.opts) })) });
+
+  pushF({ name: '財務活動によるキャッシュ・フロー', kind: 'sec', auto: true, amt: 0, sign: 1 });
+
+  pushF({ name: '長期借入れによる収入', amt: c.borrow, sign: 1, qs: [
+    { step: '区分と符号', q: '長期借入れによる収入をどう計上するか。',
+      opts: [
+        { t: '足す（＋）／財務活動', ok: true },
+        { t: '足す（＋）／営業活動（運転資金に使うから）' },
+        { t: '足す（＋）／投資活動' },
+        { t: '収益ではないので計上しない' }],
+      why: '財務CFは「資金をどう集め、どう返したか」。使い道が運転資金でも区分は変わらない。' }] });
+
+  pushF({ name: '借入金の返済による支出', amt: c.repay, sign: -1, qs: [
+    { step: '符号', q: '返済をどう計上するか。',
+      opts: [
+        { t: '差し引く（−）／収入と相殺せず総額で並べる', ok: true },
+        { t: '足す（＋）／負債が減るから' },
+        { t: '借入れと相殺して差額だけ計上する' }],
+      why: '借入と返済は総額表示が原則。相殺すると資金繰りの実態が見えなくなる。' }] });
+
+  pushF({ name: '株式の発行による収入', amt: c.issue, sign: 1, qs: [
+    { step: '区分', q: '増資による入金はどの区分か。',
+      opts: [
+        { t: '財務活動（＋）', ok: true },
+        { t: '投資活動（＋）' },
+        { t: '営業活動（＋）' },
+        { t: '資本取引なのでCFには載せない' }],
+      why: '損益には出てこないが現金は実際に入ってくる。間接法の発想がそのまま効く場面。' }] });
+
+  pushF({ name: '配当金の支払額', amt: c.divPaid, sign: -1, qs: [
+    { step: '区分', q: '配当金の支払はどの区分か。',
+      opts: [
+        { t: '財務活動（−）／株主への払い戻し', ok: true },
+        { t: '営業活動の小計より下（−）／受取配当金と同じ扱い' },
+        { t: '投資活動（−）' },
+        { t: '利益処分なので計上しない' }],
+      why: '最頻出の混乱ポイント。受取配当金は営業CF、支払配当金は財務CF。もらうのと払うのとで区分が違う。' }] });
+
+  pushF({ name: '財務活動によるキャッシュ・フロー', kind: 'total', auto: true, amt: 0, sign: 1 });
+
+  return s;
+}
+
+function cfPostAuto(steps, idx, curRun, curRows, curTotals) {
+  let n = idx, r = curRun;
+  const rw = [...curRows], tt = [...curTotals];
+  while (n < steps.length && steps[n].auto) {
+    const st = steps[n];
+    if (st.kind === 'sec') {
+      rw.push({ ...st, display: null });
+      r = 0;
+    } else if (st.kind === 'total') {
+      rw.push({ ...st, display: r, running: r });
+      tt.push({ sec: st.sec, name: st.name, value: r });
+      r = 0;
+    }
+    n++;
+  }
+  return { n, r, rw, tt };
+}
+
+function CFDrill({ onFinish, onExit }) {
+  const [mode, setMode]   = useState(null);
+  const [seed, setSeed]   = useState(0);
+  const [cse, setCse]     = useState(null);
+  const [steps, setSteps] = useState([]);
+
+  const [i, setI]           = useState(0);
+  const [qi, setQi]         = useState(0);
+  const [rows, setRows]     = useState([]);
+  const [run, setRun]       = useState(0);
+  const [totals, setTotals] = useState([]);
+  const [missed, setMissed] = useState([]);
+  const [picked, setPicked] = useState([]);
+  const [phase, setPhase]   = useState('ask');
+  const [done, setDone]     = useState(false);
+  const [reported, setReported] = useState(false);
+
+  function begin(m) {
+    const c = buildCfCase();
+    const st = buildCfSteps(c, m);
+    const seeded = cfPostAuto(st, 0, 0, [], []);
+    setCse(c);
+    setSteps(st);
+    setMode(m);
+    setI(seeded.n); setQi(0); setRows(seeded.rw); setRun(seeded.r); setTotals(seeded.tt);
+    setMissed([]); setPicked([]); setPhase('ask'); setDone(false); setReported(false);
+  }
+
+  function again() { setSeed(seed + 1); begin(mode); }
+
+  // ---- mode select ----
+  if (!mode) {
+    const card = (id, icon, title, desc, xp) => (
+      <div key={id} onClick={() => begin(id)} style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+        padding: 16, marginBottom: 12, cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'center',
+      }}>
+        <div style={{ fontSize: 28 }}>{icon}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>{desc}</div>
+          <div style={{ fontSize: 11, color: C.gold, marginTop: 5, fontWeight: 700 }}>最大 ＋{xp} XP</div>
+        </div>
+      </div>
+    );
+    return (
+      <div style={{ padding: '16px 16px 80px' }}>
+        <button onClick={onExit} style={{
+          background: 'none', border: 'none', color: C.accent, cursor: 'pointer',
+          fontSize: 22, padding: 0, marginBottom: 16 }}>←</button>
+        <div style={{ fontSize: 19, fontWeight: 700, color: C.text, marginBottom: 6 }}>⚡ 間接法CFドリル</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.7 }}>
+          項目を1つずつ「現金は動いたか → どの活動か → だから符号は」の順で判断する。
+          金額は毎回変わり、計算はドリルが積み上げます。
+        </div>
+        {card('op',   '💧', '営業CF（間接法）',      '税引前当期純利益から小計を経て営業CFまで。13項目。', 90)}
+        {card('full', '🧾', 'フルセット（3区分）',   '営業・投資・財務の3区分をまとめて組み立てる。21項目。', 150)}
+      </div>
+    );
+  }
+
+  const step = steps[i];
+  const q = step ? step.qs[qi] : null;
+
+  function choose(n) {
+    if (phase !== 'ask') return;
+    const opt = q.opts[n];
+    setPicked([...picked, n]);
+    if (opt.ok) { setPhase('right'); return; }
+    setMissed([...missed, step.name]);
+    if (picked.length > 0) setPhase('reveal');
+  }
+
+  function next() {
+    if (qi + 1 < step.qs.length) { setQi(qi + 1); setPicked([]); setPhase('ask'); return; }
+
+    const signed = step.amt * step.sign;
+    const nextRun = step.kind === 'sub' ? run : run + signed;
+    const row = {
+      ...step,
+      display: step.kind === 'sub' ? run : signed,
+      running: nextRun,
+    };
+    const res = cfPostAuto(steps, i + 1, nextRun, [...rows, row], totals);
+
+    setRows(res.rw); setRun(res.r); setTotals(res.tt);
+    setI(res.n); setQi(0); setPicked([]); setPhase('ask');
+
+    if (res.n >= steps.length) finish(res.tt);
+  }
+
+  function finish(tt) {
+    setDone(true);
+    if (reported) return;
+    setReported(true);
+    const uniq = [...new Set(missed)];
+    const base = mode === 'op' ? 90 : 150;
+    const xp = Math.max(20, base - uniq.length * 8);
+    onFinish?.({ mode, xp, missed: uniq, totals: tt });
+  }
+
+  const opTotal  = totals.find(t => t.sec === 'op')?.value ?? 0;
+  const invTotal = totals.find(t => t.sec === 'inv')?.value ?? 0;
+  const finTotal = totals.find(t => t.sec === 'fin')?.value ?? 0;
+  const netChange = opTotal + invTotal + finTotal;
+  const uniqMissed = [...new Set(missed)];
+
+  return (
+    <div style={{ padding: '16px 16px 80px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <button onClick={() => setMode(null)} style={{
+          background: 'none', border: 'none', color: C.accent, cursor: 'pointer',
+          fontSize: 22, padding: 0 }}>←</button>
+        <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: C.text }}>
+          {mode === 'op' ? '営業CF（間接法）' : 'フルセット（3区分）'}
+        </div>
+        <div style={{ fontSize: 12, color: C.muted }}>単位：万円</div>
+      </div>
+
+      {/* 進捗 */}
+      <div style={{ display: 'flex', gap: 3, marginBottom: 14 }}>
+        {steps.filter(x => !x.auto).map((x, n) => {
+          const idx = steps.filter(y => !y.auto).indexOf(x);
+          const cur = steps.filter(y => !y.auto).findIndex(y => y === step);
+          return (
+            <div key={n} style={{
+              flex: 1, height: 3, borderRadius: 2,
+              background: idx < cur || done ? C.green : idx === cur ? C.gold : C.border,
+            }} />
+          );
+        })}
+      </div>
+
+      {/* 台帳 */}
+      <div style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+        padding: '6px 0', marginBottom: 16, maxHeight: 300, overflowY: 'auto',
+      }}>
+        {rows.length === 0 && (
+          <div style={{ color: C.muted, fontSize: 12, padding: '12px 14px' }}>
+            判断した項目から順に、ここへ積み上がります。
+          </div>
+        )}
+        {rows.map((r, n) => {
+          const col = CF_SEC[r.sec] || C.accent;
+          if (r.kind === 'sec') {
+            return (
+              <div key={n} style={{
+                padding: '8px 14px 6px', fontSize: 12, fontWeight: 700, color: col,
+                borderBottom: `1px solid ${C.border}`,
+              }}>{r.name}</div>
+            );
+          }
+          const isTotal = r.kind === 'total';
+          const isSub   = r.kind === 'sub';
+          const isHead  = r.kind === 'head';
+          return (
+            <div key={n} style={{
+              display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10,
+              alignItems: 'baseline', padding: '6px 14px', fontSize: 13,
+              background: isTotal ? col + '1f' : isSub ? '#0d1117' : 'transparent',
+              borderTop: isSub || isTotal ? `1px solid ${C.border}` : 'none',
+              fontWeight: isTotal || isSub ? 700 : 400,
+            }}>
+              <span style={{ color: isTotal ? col : C.text }}>{r.name}</span>
+              <span style={{
+                fontSize: isTotal ? 16 : 14, fontWeight: 700,
+                color: isTotal ? col : isSub || isHead ? C.text
+                  : r.display >= 0 ? C.green : C.red,
+              }}>
+                {isTotal || isSub || isHead
+                  ? Number(r.display).toLocaleString()
+                  : cfSigned(r.display)}
+              </span>
+              <span style={{ fontSize: 11, color: C.muted, minWidth: 60, textAlign: 'right' }}>
+                {isTotal || isSub ? '' : Number(r.running).toLocaleString()}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 結果 */}
+      {done ? (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: '24px 18px',
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>{uniqMissed.length === 0 ? '🎉' : '📝'}</div>
+            <div style={{ fontSize: 13, color: C.muted }}>
+              {mode === 'op' ? '営業活動によるキャッシュ・フロー' : '現金及び現金同等物の増加額'}
+            </div>
+            <div style={{
+              fontSize: 32, fontWeight: 700, marginTop: 2,
+              color: uniqMissed.length === 0 ? C.gold : C.accent,
+            }}>
+              {(mode === 'op' ? opTotal : netChange).toLocaleString()}
+            </div>
+          </div>
+
+          {mode !== 'op' && (
+            <div style={{
+              background: '#0d1117', borderRadius: 10, padding: '12px 14px',
+              marginBottom: 14, fontSize: 13,
+            }}>
+              {[['営業CF', opTotal, CF_SEC.op], ['投資CF', invTotal, CF_SEC.inv], ['財務CF', finTotal, CF_SEC.fin]].map(([label, v, col]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
+                  <span style={{ color: col, fontWeight: 700 }}>{label}</span>
+                  <span style={{ color: v >= 0 ? C.green : C.red, fontWeight: 700 }}>{cfSigned(v)}</span>
+                </div>
+              ))}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', padding: '8px 0 0',
+                marginTop: 6, borderTop: `1px solid ${C.border}`,
+              }}>
+                <span style={{ color: C.muted }}>期首残高 {cse.opening.toLocaleString()} → 期末残高</span>
+                <span style={{ color: C.text, fontWeight: 700 }}>{(cse.opening + netChange).toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+
+          <div style={{
+            background: '#0d1117', borderRadius: 10, padding: '12px 14px',
+            marginBottom: 18, fontSize: 13, color: C.text, lineHeight: 1.7,
+          }}>
+            {uniqMissed.length === 0
+              ? '全項目ノーミス。次は数字を変えて、迷わず符号が出るかを試してください。'
+              : (<>つまずいた項目
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: C.muted }}>
+                    {uniqMissed.map(m => <li key={m} style={{ margin: '3px 0' }}>{m}</li>)}
+                  </ul>
+                </>)}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={again} style={{
+              flex: 1, padding: '13px', borderRadius: 10, border: `1px solid ${C.accent}`,
+              background: 'transparent', color: C.accent, fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}>別の数字でもう一度</button>
+            <button onClick={() => setMode(null)} style={{
+              flex: 1, padding: '13px', borderRadius: 10, border: 'none',
+              background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}>ドリル一覧へ</button>
+          </div>
+        </div>
+      ) : step && q ? (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`,
+          borderLeft: `3px solid ${CF_SEC[step.sec]}`, borderRadius: 14, padding: '16px 15px',
+        }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
+            paddingBottom: 12, marginBottom: 14, borderBottom: `1px dashed ${C.border}`,
+          }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{step.name}</span>
+            {step.kind !== 'sub' && (
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>
+                {step.amt.toLocaleString()}
+              </span>
+            )}
+          </div>
+
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>{q.step}</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 14, lineHeight: 1.6 }}>{q.q}</div>
+
+          {q.opts.map((o, n) => {
+            const wrong = picked.includes(n) && !o.ok;
+            const right = (phase === 'right' && picked.includes(n) && o.ok) || (phase === 'reveal' && o.ok);
+            return (
+              <button key={n} onClick={() => choose(n)} disabled={phase !== 'ask' || wrong}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '12px 13px', marginBottom: 8, borderRadius: 10,
+                  border: `1px solid ${right ? C.green : wrong ? C.red : C.border}`,
+                  background: right ? C.green + '1f' : wrong ? C.red + '18' : '#0d1117',
+                  color: C.text, fontSize: 14, lineHeight: 1.55,
+                  cursor: phase === 'ask' && !wrong ? 'pointer' : 'default',
+                  fontFamily: 'inherit',
+                }}>{o.t}</button>
+            );
+          })}
+
+          {phase === 'ask' && picked.length > 0 && (
+            <div style={{
+              marginTop: 12, padding: '12px 13px', borderRadius: 10,
+              background: C.red + '14', border: `1px solid ${C.red}44`, fontSize: 13, color: C.text,
+            }}>
+              ちがいます。現金が実際に動いたかどうかで、もう一度考えてみてください。
+            </div>
+          )}
+
+          {(phase === 'right' || phase === 'reveal') && (
+            <>
+              <div style={{
+                marginTop: 12, padding: '12px 13px', borderRadius: 10,
+                background: phase === 'right' ? C.green + '14' : C.red + '14',
+                border: `1px solid ${phase === 'right' ? C.green : C.red}44`,
+                fontSize: 13, color: C.text, lineHeight: 1.7,
+              }}>
+                <div style={{
+                  fontWeight: 700, marginBottom: 3,
+                  color: phase === 'right' ? C.green : C.red,
+                }}>{phase === 'right' ? 'そのとおり' : '正解はこちら'}</div>
+                {q.why}
+              </div>
+              <button onClick={next} style={{
+                marginTop: 12, width: '100%', padding: 13, borderRadius: 10, border: 'none',
+                background: phase === 'right' ? C.accent : C.border,
+                color: phase === 'right' ? '#000' : C.text,
+                fontWeight: 700, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                {qi + 1 < step.qs.length ? '次の分岐へ' : '台帳に記入する'}
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillComplete }) {
   const [view, setView]                   = useState('list');
   const [selectedCase, setSelectedCase]   = useState('case4');
   const [filterType, setFilterType]           = useState('all');
@@ -3797,6 +4649,10 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
   });
 
   // ---- List view ----
+  if (view === 'drill') {
+    return <CFDrill onFinish={onDrillComplete} onExit={() => setView('list')} />;
+  }
+
   if (view === 'list') {
     return (
       <div style={{ padding: '16px 16px 80px' }}>
@@ -4017,6 +4873,27 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete }) {
               {caseTitles[selectedCase]}
             </div>
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>ステップ別選択問題</div>
+
+            {!isCaseStudy && (
+              <div
+                onClick={() => setView('drill')}
+                style={{
+                  background: `linear-gradient(135deg, ${C.accent}22, ${C.purple}22)`,
+                  border: `1px solid ${C.accent}66`, borderRadius: 14,
+                  padding: '14px 16px', marginBottom: 16, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 14,
+                }}
+              >
+                <div style={{ fontSize: 26 }}>⚡</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>間接法CFドリル</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
+                    数字が毎回変わる。符号を判断すると台帳が積み上がります
+                  </div>
+                </div>
+                <div style={{ fontSize: 18, color: C.accent }}>›</div>
+              </div>
+            )}
 
             {/* Case selector */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -4486,6 +5363,29 @@ export default function App() {
     }
   }
 
+  function handleDrillComplete({ mode, xp, missed }) {
+    const label = mode === 'op' ? '間接法CFドリル（営業CF）' : '間接法CFドリル（3区分）';
+    const prev = data.drillProgress?.[mode] || { attempts: 0, bestXp: 0 };
+    let d = {
+      ...data,
+      drillProgress: {
+        ...data.drillProgress,
+        [mode]: { attempts: prev.attempts + 1, bestXp: Math.max(prev.bestXp, xp) },
+      },
+    };
+    const prevLevel = getLevel(data.xp);
+    const hi = buildHistoryItem('⚡', label, xp);
+    d = applyXpGain(d, xp, hi);
+    commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
+    setReward({
+      icon: '⚡', title: label, xp,
+      message: missed.length === 0 ? '全項目ノーミス！' : `つまずき ${missed.length} 項目`,
+    });
+    setParticles(xp);
+  }
+
   function handleCaseStudyComplete(problemId, correctCount, totalCount) {
     const problem = CASE_STUDY_PROBLEMS.find(p => p.id === problemId);
     const prev = data.caseProgress?.[problemId] || { attempts: 0, bestCorrect: 0, completed: false };
@@ -4573,7 +5473,7 @@ export default function App() {
         <HistoryTab data={data} />
       )}
       {tab === 'finance' && (
-        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} onCaseStudyComplete={handleCaseStudyComplete} />
+        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} onCaseStudyComplete={handleCaseStudyComplete} onDrillComplete={handleDrillComplete} />
       )}
 
       <BottomNav active={tab} onChange={setTab} remainingCount={remainingQuests} />
