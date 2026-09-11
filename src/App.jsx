@@ -4327,7 +4327,7 @@ function CFDrill({ onFinish, onExit }) {
     const uniq = [...new Set(missed)];
     const base = mode === 'op' ? 90 : 150;
     const xp = Math.max(20, base - uniq.length * 8);
-    onFinish?.({ mode, xp, missed: uniq, totals: tt });
+    onFinish?.({ drill: 'cf', mode, xp, missed: uniq, totals: tt });
   }
 
   const opTotal  = totals.find(t => t.sec === 'op')?.value ?? 0;
@@ -4550,6 +4550,777 @@ function CFDrill({ onFinish, onExit }) {
   );
 }
 
+// ============================================================
+// NPVドリル（表を書く → まとめて割り引く）
+// ============================================================
+
+// 現価係数・年金現価係数（年金＝各年の現価係数の合計と一致する率のみ採用）
+const NPV_TABLE = {
+  6: { pv: [0.943, 0.890, 0.840, 0.792, 0.747], ann: [0.943, 1.833, 2.673, 3.465, 4.212] },
+  7: { pv: [0.935, 0.873, 0.816, 0.763, 0.713], ann: [0.935, 1.808, 2.624, 3.387, 4.100] },
+  8: { pv: [0.926, 0.857, 0.794, 0.735, 0.681], ann: [0.926, 1.783, 2.577, 3.312, 3.993] },
+};
+const NPV_YEARS = 5;
+const NPV_GROUP_LABEL = {
+  flow: '毎年発生するCF',
+  once: '一時的に発生するCF',
+  out:  '表に載せないもの',
+};
+
+function npvNum(n) {
+  return (Math.round(n * 10) / 10).toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+}
+
+function npvSigned(n) {
+  return (n < 0 ? '−' : '＋') + npvNum(Math.abs(n));
+}
+
+function npvPick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function buildNpvCase(mode) {
+  const rate  = npvPick([6, 7, 8]);
+  const split = npvPick([2, 3]);
+  const tax   = npvPick([30, 40]);
+  const t     = tax / 100;
+  const invest = cfRnd(2500, 4000, 100);
+  const c = {
+    mode, rate, split, tax, invest,
+    dep:      invest / NPV_YEARS,
+    cfEarly:  cfRnd(500, 800, 50),
+    interest: cfRnd(60, 150, 10),
+  };
+  c.cfLate  = c.cfEarly + cfRnd(200, 600, 50);
+  c.atEarly = Math.round(c.cfEarly * (1 - t) + c.dep * t);
+  c.atLate  = Math.round(c.cfLate  * (1 - t) + c.dep * t);
+  if (mode === 'full') {
+    c.sunk    = cfRnd(50, 150, 10);
+    c.opp     = cfRnd(40, 100, 10);
+    c.wc      = cfRnd(150, 400, 50);
+    c.oldBook = cfRnd(300, 600, 50);
+    c.oldLoss = cfRnd(50, 150, 50);
+    c.oldSell = c.oldBook - c.oldLoss;
+    c.salvage = cfRnd(200, 500, 50);
+    c.atOpp     = Math.round(c.opp * (1 - t));
+    c.oldNet    = Math.round(c.oldSell + c.oldLoss * t);
+    c.atSalvage = Math.round(c.salvage * (1 - t));
+  }
+  return c;
+}
+
+function buildNpvSteps(c) {
+  const full = c.mode === 'full';
+  const T    = NPV_TABLE[c.rate];
+  const t    = c.tax / 100;
+  const Y    = NPV_YEARS;
+  const sp   = c.split;
+  const n    = (x) => Math.round(x).toLocaleString('ja-JP');
+  const f3   = (x) => x.toFixed(3);
+
+  const annSp = T.ann[sp - 1];
+  const ann5  = T.ann[Y - 1];
+  const pv5   = T.pv[Y - 1];
+  const lateF = Math.round((ann5 - annSp) * 1000) / 1000;
+
+  const flowEarly = c.atEarly - (full ? c.atOpp : 0);
+  const flowLate  = c.atLate  - (full ? c.atOpp : 0);
+  const zero = full ? -c.invest + c.oldNet - c.wc : -c.invest;
+  const last = full ? c.wc + c.atSalvage : 0;
+  const npv  = zero + flowEarly * annSp + flowLate * lateF + last * pv5;
+
+  const s = [];
+  const push = (o) => s.push({ ...o, qs: (o.qs || []).map(q => ({ ...q, opts: cfShuffle(q.opts) })) });
+  const span = (from, to, amt) => {
+    const cells = {};
+    for (let y = from; y <= to; y++) cells[y] = amt;
+    return cells;
+  };
+
+  // ---------- 表を書く ----------
+
+  if (full) push({
+    phase: 'table', name: '立地調査費（昨年支出済み）', amt: c.sunk,
+    row: { label: '立地調査費', group: 'out', cells: {}, note: '埋没原価 → 表に載せない' },
+    qs: [
+      { step: '載せるか', q: 'この計画のために昨年すでに ' + n(c.sunk) + ' の立地調査費を支出している。投資判断にどう反映するか。',
+        opts: [
+          { t: '反映しない（すでに支出済みで、どちらに決めても戻らない）', ok: true },
+          { t: 't=0 の支出として表に載せる' },
+          { t: '5年で按分して各年の費用に含める' },
+          { t: '取得原価に加算して減価償却する' }],
+        why: '埋没原価（サンクコスト）。意思決定で比べるのは「これから動く現金」だけ。逆に、投資しなければ得られたはずの収入は機会原価として計上する。' }] });
+
+  push({
+    phase: 'table', name: '設備の取得支出', amt: c.invest,
+    row: { label: '設備の取得支出', group: 'once', cells: { 0: -c.invest } },
+    qs: [
+      { step: '1／2　時点', q: '設備の取得支出 ' + n(c.invest) + ' は、表のどの列に置くか。',
+        opts: [
+          { t: 't=0（投資開始時に全額）', ok: true },
+          { t: 't=1〜' + Y + ' に ' + n(c.dep) + ' ずつ5等分' },
+          { t: 't=' + Y + '（耐用年数の終了時）' },
+          { t: '表には載せず、減価償却費として扱う' }],
+        why: '支出は買った時点で一度に起きる。5年に分けるのは減価償却という会計上の配分であって、現金の動きではない。' },
+      { step: '2／2　符号', q: '符号は。',
+        opts: [
+          { t: '−（現金が出ていく）', ok: true },
+          { t: '＋（資産が増える）' }],
+        why: '表に書くのは資産の増減ではなく現金の出入り。' }] });
+
+  if (full) push({
+    phase: 'table', name: '旧設備の売却', amt: c.oldSell,
+    row: { label: '旧設備の売却', group: 'once', cells: { 0: c.oldNet } },
+    qs: [
+      { step: '1／2　税への影響', q: '簿価 ' + n(c.oldBook) + ' の旧設備を ' + n(c.oldSell) + ' で売却した。税金への影響は。',
+        opts: [
+          { t: '売却損 ' + n(c.oldLoss) + ' が出るので、税金が ' + n(c.oldLoss * t) + ' 減る', ok: true },
+          { t: '売却益 ' + n(c.oldLoss) + ' が出るので、税金が ' + n(c.oldLoss * t) + ' 増える' },
+          { t: '現金が入るだけで、税金には影響しない' },
+          { t: '簿価 ' + n(c.oldBook) + ' 全額に税率を掛けた分だけ税金が減る' }],
+        why: '売却損益 ＝ 売却価格 − 簿価 ＝ ' + n(c.oldSell) + ' − ' + n(c.oldBook) + ' ＝ −' + n(c.oldLoss) + '。損が出ると課税所得が減り、その分だけ税金が軽くなる。' },
+      { step: '2／2　金額', q: 'では t=0 に載せる正味手取額は。',
+        opts: [
+          { t: '売却価格 ＋ 節税額 ＝ ' + n(c.oldNet), ok: true },
+          { t: '売却価格のみ ＝ ' + n(c.oldSell) },
+          { t: '売却価格 − 節税額 ＝ ' + n(c.oldSell - c.oldLoss * t) },
+          { t: '簿価と同額 ＝ ' + n(c.oldBook) }],
+        why: '節税分だけ手元に残る現金が増える。この ' + n(c.oldNet) + ' が新設備の支出を軽くする。' }] });
+
+  if (full) push({
+    phase: 'table', name: '運転資本の増加', amt: c.wc,
+    row: { label: '運転資本の増加', group: 'once', cells: { 0: -c.wc } },
+    qs: [
+      { step: '1／2　時点', q: '増産にともない運転資本が ' + n(c.wc) + ' 増える。どの列に置くか。',
+        opts: [
+          { t: 't=0（操業を始める前に用意しておく必要がある）', ok: true },
+          { t: 't=1〜' + Y + ' に均等に分ける' },
+          { t: 't=' + Y + '（最終年度にまとめて）' },
+          { t: '損益に出ないので表には載せない' }],
+        why: '売掛金と在庫が先に膨らむので、売上が立つ前に資金が要る。費用ではないがキャッシュは確実に出ていく。' },
+      { step: '2／2　行き先', q: 'この ' + n(c.wc) + ' は最後どうなるか。',
+        opts: [
+          { t: '最終年度に全額回収される（＋で計上する）', ok: true },
+          { t: '回収されない（設備と同じく戻ってこない）' },
+          { t: '減価償却を通じて毎年少しずつ戻る' }],
+        why: '事業をやめれば売掛金は回収され、在庫は売り切れる。だから最終年度に同額を＋で戻す。ここを忘れるとNPVを過小評価する。' }] });
+
+  push({
+    phase: 'table', name: '支払利息', amt: c.interest,
+    row: { label: '支払利息', group: 'out', cells: {}, note: '割引率 ' + c.rate + '% に織り込み済み → 表に載せない' },
+    qs: [
+      { step: '1／2　載せるか', q: 'この投資のための借入にともなう支払利息 ' + n(c.interest) + '／年 を、各年のCFに含めるか。',
+        opts: [
+          { t: '含めない（資金調達コストは割引率 ' + c.rate + '% に織り込まれている）', ok: true },
+          { t: '含める（実際に現金が出ていくから）' },
+          { t: '税引後の ' + n(c.interest * (1 - t)) + ' だけ含める' },
+          { t: 't=0 にまとめて5年分を含める' }],
+        why: '割引率は資本コストそのもの。CFにも利息を入れると資本コストを二重に引くことになる。表に書くのは「事業が生む現金」だけ。' },
+      { step: '2／2　では税金は', q: '同じ理屈で、法人税もCFに含めないのか。',
+        opts: [
+          { t: '法人税は含める（割引率とは無関係に出ていく現金）', ok: true },
+          { t: '法人税も含めない（利息と同じ扱い）' },
+          { t: '法人税は t=0 にまとめて含める' }],
+        why: '割引率が表しているのは資金の調達コストだけ。税金はそこに含まれないので、CFの側で必ず引く。' }] });
+
+  push({
+    phase: 'table', name: '減価償却費', amt: c.dep,
+    row: { label: '減価償却費', group: 'out', cells: {}, note: '非現金費用 → 表に載せず、税引後CFの計算に使う' },
+    qs: [
+      { step: '1／2　現金は動くか', q: '減価償却費 ' + n(c.dep) + '／年 を計上したとき、その年に現金は出ていくか。',
+        opts: [
+          { t: '出ていかない（t=0 の支出を各年に配分しただけ）', ok: true },
+          { t: '毎年 ' + n(c.dep) + ' ずつ出ていく' },
+          { t: '税率を掛けた分だけ出ていく' }],
+        why: '現金は設備を買った t=0 で出し切っている。減価償却費をそのまま表に書くと二重計上になる。' },
+      { step: '2／2　ならば無視か', q: 'では投資判断から完全に無視してよいか。',
+        opts: [
+          { t: 'よくない（費用になる分だけ税金が ' + n(c.dep * t) + ' 減る）', ok: true },
+          { t: '無視してよい（現金が動かないのだから）' },
+          { t: '取得原価から差し引いておく' }],
+        why: '現金は動かないのに税金だけ減る。これがタックスシールド。節税額 ＝ 減価償却費 × 税率 ＝ ' + n(c.dep) + ' × ' + c.tax + '% ＝ ' + n(c.dep * t) + '。' }] });
+
+  if (full) push({
+    phase: 'table', name: '遊休地の賃貸収入', amt: c.opp,
+    row: { label: '機会原価', group: 'flow', cells: span(1, Y, -c.atOpp) },
+    qs: [
+      { step: '1／2　載せるか', q: 'この投資に使う遊休地は、貸せば年 ' + n(c.opp) + ' の賃貸収入を生んでいた。どう扱うか。',
+        opts: [
+          { t: '機会原価として各年のCFから差し引く', ok: true },
+          { t: '実際の支出ではないので無視する' },
+          { t: 't=0 にまとめて5年分を差し引く' },
+          { t: '収入なので各年のCFに加算する' }],
+        why: '投資しなければ得られたはずの利益を、投資することで手放している。「もう戻らない過去」＝埋没原価は無視、「これから諦める未来」＝機会原価は計上、と対で覚える。' },
+      { step: '2／2　税引後', q: '表に載せる金額は。',
+        opts: [
+          { t: '税引後の ' + n(c.atOpp) + '（' + n(c.opp) + ' × (1−' + c.tax + '%)）', ok: true },
+          { t: '税引前の ' + n(c.opp) + ' をそのまま' },
+          { t: n(c.opp) + ' × ' + c.tax + '% ＝ ' + n(c.opp * t) },
+          { t: '非現金の項目なので0' }],
+        why: '賃貸収入を失えば課税所得もその分減る。表に並ぶ数字はすべて税引後にそろえておくこと。' }] });
+
+  push({
+    phase: 'table', name: '立上げ期の営業CF（t=1〜' + sp + '）', amt: c.cfEarly,
+    row: { label: '税引後営業CF', group: 'flow', cells: span(1, sp, c.atEarly) },
+    qs: [
+      { step: '1／2　式', q: '立上げ期（t=1〜' + sp + '）の税引前営業CFは ' + n(c.cfEarly) + '／年。税引後CFを求める式はどれか。',
+        opts: [
+          { t: '税引前CF×(1−税率) ＋ 減価償却費×税率', ok: true },
+          { t: '税引前CF×(1−税率)' },
+          { t: '税引前CF×(1−税率) − 減価償却費×税率' },
+          { t: '(税引前CF ＋ 減価償却費)×(1−税率)' }],
+        why: 'まず全体に税をかけ、そのあとタックスシールドを足し戻す。' + n(c.cfEarly) + '×' + (1 - t).toFixed(1) + ' ＋ ' + n(c.dep) + '×' + t.toFixed(1) + ' ＝ ' + n(c.atEarly) + '。' },
+      { step: '2／2　時点', q: 'この ' + n(c.atEarly) + ' を表のどの列に置くか。',
+        opts: [
+          { t: 't=1 から t=' + sp + ' までの各列', ok: true },
+          { t: 't=0 から t=' + sp + ' までの各列' },
+          { t: 't=0 にまとめて' },
+          { t: 't=1 から t=' + Y + ' までの全列' }],
+        why: '営業CFが生まれるのは操業してから。t=0 は投資だけの列で、営業CFは入らない。' }] });
+
+  push({
+    phase: 'table', name: '本格稼働期の営業CF（t=' + (sp + 1) + '〜' + Y + '）', amt: c.cfLate,
+    row: { label: '税引後営業CF', group: 'flow', cells: span(sp + 1, Y, c.atLate) },
+    qs: [
+      { step: '1／2　式', q: 't=' + (sp + 1) + ' 以降は税引前営業CFが ' + n(c.cfLate) + ' に増える。減価償却費は ' + n(c.dep) + ' のまま。税引後CFはどうなるか。',
+        opts: [
+          { t: '同じ式をあてはめ直して ' + n(c.atLate) + '（増えた分にも税がかかる）', ok: true },
+          { t: '立上げ期の ' + n(c.atEarly) + ' に、増えた分 ' + n(c.cfLate - c.cfEarly) + ' をそのまま足す' },
+          { t: '減価償却費はもう使えないので ' + n(c.cfLate * (1 - t)) },
+          { t: '立上げ期と同じ ' + n(c.atEarly) + '（営業CFの増減はNPVに影響しない）' }],
+        why: '式は毎年同じ。' + n(c.cfLate) + '×' + (1 - t).toFixed(1) + ' ＋ ' + n(c.dep) + '×' + t.toFixed(1) + ' ＝ ' + n(c.atLate) + '。定額法なら減価償却費は毎年一定なので、タックスシールドも毎年一定。' },
+      { step: '2／2　時点', q: 'どの列に置くか。',
+        opts: [
+          { t: 't=' + (sp + 1) + ' から t=' + Y + ' までの各列', ok: true },
+          { t: 't=' + sp + ' から t=' + Y + ' までの各列' },
+          { t: 't=' + Y + ' にまとめて' }],
+        why: 'ここで区切った ' + sp + ' 年と ' + (Y - sp) + ' 年のかたまりが、このあと年金現価係数をまとめて使う単位になる。' }] });
+
+  if (full) push({
+    phase: 'table', name: '運転資本の回収', amt: c.wc,
+    row: { label: '運転資本の回収', group: 'once', cells: { [Y]: c.wc } },
+    qs: [
+      { step: '金額', q: '最終年度に回収される運転資本は、いくらで載せるか。',
+        opts: [
+          { t: '投下額と同額の ' + n(c.wc) + '（税金はかからない）', ok: true },
+          { t: '税引後の ' + n(c.wc * (1 - t)) },
+          { t: n(c.wc) + ' × ' + c.tax + '% ＝ ' + n(c.wc * t) },
+          { t: '投下時に費用処理済みなので載せない' }],
+        why: '売掛金を回収し在庫を売り切るだけで、新しい利益が生まれるわけではない。課税所得は動かないので税引前＝税引後。' }] });
+
+  if (full) push({
+    phase: 'table', name: '設備の売却（t=' + Y + '）', amt: c.salvage,
+    row: { label: '設備の売却', group: 'once', cells: { [Y]: c.atSalvage } },
+    qs: [
+      { step: '1／2　売却益', q: '耐用年数の終了時に設備が ' + n(c.salvage) + ' で売却できた。簿価は0（残存価値0で償却済み）。税金はどうなるか。',
+        opts: [
+          { t: '全額が売却益になり、税金が ' + n(c.salvage * t) + ' かかる', ok: true },
+          { t: '簿価が0なので売却益は出ず、税金もかからない' },
+          { t: '売却損 ' + n(c.salvage) + ' が出るので節税になる' },
+          { t: '投資活動のCFなので課税の対象外' }],
+        why: '売却損益 ＝ 売却価格 − 簿価 ＝ ' + n(c.salvage) + ' − 0。償却し切った資産が売れると全額が益になる。旧設備の売却損とちょうど裏返しの関係。' },
+      { step: '2／2　金額', q: '表に載せる金額は。',
+        opts: [
+          { t: '税引後の ' + n(c.atSalvage), ok: true },
+          { t: '売却価格そのままの ' + n(c.salvage) },
+          { t: '税額分の ' + n(c.salvage * t) },
+          { t: '運転資本の回収と同じく税引前＝税引後で ' + n(c.salvage) }],
+        why: '手元に残るのは税を払ったあとの ' + n(c.atSalvage) + '。運転資本の回収と違い、こちらは利益が出るので課税される。' }] });
+
+  // ---------- まとめて割り引く ----------
+
+  push({
+    phase: 'discount', name: 'まとめ方を決める',
+    qs: [
+      { step: '方針', q: '表が埋まった。ここから何回に分けて割り引くか。',
+        opts: [
+          { t: '同じ金額が続くまとまりごとに分ける（' + (full ? 4 : 3) + 'ブロック）', ok: true },
+          { t: '各年ごとに現価係数を掛ける（' + (Y + 1) + '回）' },
+          { t: 't=1〜' + Y + ' を年金現価係数(' + Y + '年)でまとめて1回' },
+          { t: '全期間のCFを先に合計してから、年金現価係数を掛ける' }],
+        why: '同額が続く区間は年金現価係数で一発。金額が変わる年で区切り、1回きりのCFは別ブロックにする。今回は t=0／t=1〜' + sp + '／t=' + (sp + 1) + '〜' + Y + (full ? '／t=' + Y + ' の一時CF の4ブロック。' : ' の3ブロック。') }] });
+
+  push({
+    phase: 'discount', name: 't=0 のCF',
+    block: { label: 't=0' + (full ? '（設備・旧設備・運転資本）' : '（設備の取得）'), cf: zero, factor: 1, factorLabel: '1.000', sub: '割り引かない' },
+    qs: [
+      { step: '係数', q: 't=0 の ' + npvSigned(zero) + ' に掛ける係数はどれか。',
+        opts: [
+          { t: '1.000（すでに現在の金額なので割り引かない）', ok: true },
+          { t: '現価係数(1年) ＝ ' + f3(T.pv[0]) },
+          { t: '年金現価係数(' + Y + '年) ＝ ' + f3(ann5) },
+          { t: '現価係数(' + Y + '年) ＝ ' + f3(pv5) }],
+        why: '現在価値は「いまの価値に直す」こと。t=0 はすでに現在なので、そのままの金額で足す。' }] });
+
+  push({
+    phase: 'discount', name: 't=1〜' + sp + ' の定常CF',
+    block: { label: 't=1〜' + sp + ' の定常CF', cf: flowEarly, factor: annSp, factorLabel: f3(annSp), sub: '年金現価係数(' + sp + '年)' },
+    qs: [
+      { step: '係数', q: 't=1〜' + sp + ' は毎年 ' + npvSigned(flowEarly) + ' で同額。掛ける係数はどれか。',
+        opts: [
+          { t: '年金現価係数(' + sp + '年) ＝ ' + f3(annSp), ok: true },
+          { t: '現価係数(' + sp + '年) ＝ ' + f3(T.pv[sp - 1]) },
+          { t: '年金現価係数(' + Y + '年) ＝ ' + f3(ann5) },
+          { t: '現価係数(1年) ＝ ' + f3(T.pv[0]) + ' を ' + sp + ' 回掛ける' }],
+        why: '年金現価係数(' + sp + '年) ＝ ' + T.pv.slice(0, sp).map(f3).join(' ＋ ') + ' ＝ ' + f3(annSp) + '。1年目から連続して同額が続く区間は、表の値をそのまま使える。' }] });
+
+  push({
+    phase: 'discount', name: 't=' + (sp + 1) + '〜' + Y + ' の定常CF',
+    block: { label: 't=' + (sp + 1) + '〜' + Y + ' の定常CF', cf: flowLate, factor: lateF, factorLabel: f3(lateF), sub: f3(ann5) + ' − ' + f3(annSp) },
+    qs: [
+      { step: '1／3　そのまま使えるか', q: 't=' + (sp + 1) + '〜' + Y + ' の ' + (Y - sp) + ' 年分をまとめたい。年金現価係数(' + (Y - sp) + '年) ＝ ' + f3(T.ann[Y - sp - 1]) + ' を使ってよいか。',
+        opts: [
+          { t: '使えない（年金現価係数は必ず1年目から数えた値だから）', ok: true },
+          { t: '使える（' + (Y - sp) + ' 年分であることに変わりはない）' },
+          { t: '使える（ただし最後に現価係数(' + sp + '年)で割る）' }],
+        why: '年金現価係数(' + (Y - sp) + '年) が表しているのは t=1〜' + (Y - sp) + ' の ' + (Y - sp) + ' 年分。いま欲しいのは t=' + (sp + 1) + '〜' + Y + ' で、始まる時点がずれている。' },
+      { step: '2／3　作り方', q: 'では t=' + (sp + 1) + '〜' + Y + ' の係数をどう作るか。',
+        opts: [
+          { t: '年金現価係数(' + Y + '年) − 年金現価係数(' + sp + '年)', ok: true },
+          { t: '年金現価係数(' + Y + '年) − 年金現価係数(' + (Y - sp) + '年)' },
+          { t: '年金現価係数(' + (Y - sp) + '年) − 年金現価係数(' + sp + '年)' },
+          { t: '年金現価係数(' + Y + '年) × 現価係数(' + sp + '年)' }],
+        why: 't=1〜' + Y + ' のかたまりから、すでに使った t=1〜' + sp + ' のかたまりを取り除く。' + f3(ann5) + ' − ' + f3(annSp) + ' ＝ ' + f3(lateF) + '。' },
+      { step: '3／3　確認', q: 'この ' + f3(lateF) + ' は何を表しているか。',
+        opts: [
+          { t: T.pv.slice(sp).map((v, k) => (sp + k + 1) + '年目 ' + f3(v)).join('、') + ' を足したもの', ok: true },
+          { t: (Y - sp) + ' 年分の現価係数の平均' },
+          { t: Y + ' 年目の現価係数 ' + f3(pv5) + ' と同じもの' },
+          { t: '割引率 ' + c.rate + '% を ' + (Y - sp) + ' 年分に按分したもの' }],
+        why: '実際に足すと ' + T.pv.slice(sp).map(f3).join(' ＋ ') + ' ＝ ' + f3(lateF) + '。表から2つ拾って引くほうが速く、写し間違いも減る。' }] });
+
+  if (full) push({
+    phase: 'discount', name: 't=' + Y + ' の一時的なCF',
+    block: { label: 't=' + Y + '（運転資本の回収＋設備の売却）', cf: last, factor: pv5, factorLabel: f3(pv5), sub: '現価係数(' + Y + '年)' },
+    qs: [
+      { step: '1／2　なぜ分けるか', q: '運転資本の回収 ' + n(c.wc) + ' と設備売却 ' + n(c.atSalvage) + ' も t=' + Y + ' に起きる。なぜ営業CFのブロックと分けるのか。',
+        opts: [
+          { t: '毎年続くCFではなく、t=' + Y + ' に1回だけ起きるものだから', ok: true },
+          { t: '営業活動ではなく投資活動のCFだから' },
+          { t: '税金がかからないCFだから' },
+          { t: '金額が大きいから' }],
+        why: '年金現価係数は「同額が続く」ときの道具。1回きりのCFは、その年の現価係数で個別に割り引く。' },
+      { step: '2／2　係数', q: '掛ける係数はどれか。',
+        opts: [
+          { t: '現価係数(' + Y + '年) ＝ ' + f3(pv5), ok: true },
+          { t: '年金現価係数(' + Y + '年) ＝ ' + f3(ann5) },
+          { t: '1.000（最終年度なので割り引かない）' },
+          { t: f3(lateF) + '（営業CFと同じブロックの係数）' }],
+        why: '(' + n(c.wc) + ' ＋ ' + n(c.atSalvage) + ') × ' + f3(pv5) + ' ＝ ' + npvNum(last * pv5) + '。年金現価係数を掛けると5年分もらったことになり、大幅な過大評価になる。' }] });
+
+  const pos = npv > 0;
+  push({
+    phase: 'discount', name: 'NPVで判断する',
+    qs: [
+      { step: '1／2　判定', q: 'ブロックを合計して NPV ＝ ' + npvSigned(npv) + ' となった。この投資案をどう判断するか。',
+        opts: [
+          { t: '投資すべき（NPV ＞ 0）', ok: pos },
+          { t: '投資すべきでない（NPV ＜ 0）', ok: !pos },
+          { t: 'IRRを計算しないと判断できない' },
+          { t: '回収期間法でも確かめないと判断できない' }],
+        why: pos
+          ? 'NPVが正 ＝ 資本コスト ' + c.rate + '% を上回るリターンが出ている。複数案を比べるときはNPVの大きいほうを選ぶ。'
+          : 'NPVが負 ＝ 資本コスト ' + c.rate + '% を回収できない。会計上の利益が出ていても、この投資案は採るべきでない。' },
+      { step: '2／2　意味', q: 'NPVがちょうど0になるとき、割引率は何と一致するか。',
+        opts: [
+          { t: 'IRR（内部収益率）', ok: true },
+          { t: 'ROI（投資利益率）' },
+          { t: '回収期間の逆数' },
+          { t: '加重平均資本コストの半分' }],
+        why: 'IRRは「NPVを0にする割引率」。資本コスト ＜ IRR ならNPVは正になるので、単独案ではNPV法とIRR法の結論は一致する。' }] });
+
+  return { steps: s, npv, rate: c.rate };
+}
+
+function NpvDrill({ onFinish, onExit }) {
+  const [mode, setMode]     = useState(null);
+  const [cse, setCse]       = useState(null);
+  const [steps, setSteps]   = useState([]);
+  const [npv, setNpv]       = useState(0);
+
+  const [i, setI]           = useState(0);
+  const [qi, setQi]         = useState(0);
+  const [rows, setRows]     = useState([]);
+  const [blocks, setBlocks] = useState([]);
+  const [missed, setMissed] = useState([]);
+  const [picked, setPicked] = useState([]);
+  const [phase, setPhase]   = useState('ask');
+  const [done, setDone]     = useState(false);
+  const [reported, setReported] = useState(false);
+
+  function begin(m) {
+    const c = buildNpvCase(m);
+    const built = buildNpvSteps(c);
+    setCse(c); setSteps(built.steps); setNpv(built.npv); setMode(m);
+    setI(0); setQi(0); setRows([]); setBlocks([]);
+    setMissed([]); setPicked([]); setPhase('ask'); setDone(false); setReported(false);
+  }
+
+  function again() { begin(mode); }
+
+  // ---- mode select ----
+  if (!mode) {
+    const card = (id, icon, title, desc, xp) => (
+      <div key={id} onClick={() => begin(id)} style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+        padding: 16, marginBottom: 12, cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'center',
+      }}>
+        <div style={{ fontSize: 28 }}>{icon}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>{desc}</div>
+          <div style={{ fontSize: 11, color: C.gold, marginTop: 5, fontWeight: 700 }}>最大 ＋{xp} XP</div>
+        </div>
+      </div>
+    );
+    return (
+      <div style={{ padding: '16px 16px 80px' }}>
+        <button onClick={onExit} style={{
+          background: 'none', border: 'none', color: C.purple, cursor: 'pointer',
+          fontSize: 22, padding: 0, marginBottom: 16 }}>←</button>
+        <div style={{ fontSize: 19, fontWeight: 700, color: C.text, marginBottom: 6 }}>💹 NPVドリル</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.7 }}>
+          試験の答案と同じ順番で進めます。まず年度別のCF表を書き、同じ金額が続く区間を
+          年金現価係数の引き算でまとめて割り引く。金額・割引率・税率は毎回変わります。
+        </div>
+        {card('basic', '📊', '表を書いてまとめて割り引く', '取得支出・タックスシールド・支払利息の扱いから、年金現価係数の引き算まで。10項目18問。', 90)}
+        {card('full',  '🏭', 'フルセット（設備更新）',     '旧設備の売却・運転資本・埋没原価・機会原価・残存価値まで含めた設備更新投資。17項目30問。', 150)}
+      </div>
+    );
+  }
+
+  const step = steps[i];
+  const q = step ? step.qs[qi] : null;
+
+  function choose(k) {
+    if (phase !== 'ask') return;
+    const opt = q.opts[k];
+    setPicked([...picked, k]);
+    if (opt.ok) { setPhase('right'); return; }
+    setMissed([...missed, step.name]);
+    if (picked.length > 0) setPhase('reveal');
+  }
+
+  function next() {
+    if (qi + 1 < step.qs.length) { setQi(qi + 1); setPicked([]); setPhase('ask'); return; }
+
+    if (step.row) {
+      setRows(prev => {
+        const k = prev.findIndex(r => r.label === step.row.label);
+        if (k < 0) return [...prev, { ...step.row }];
+        const merged = [...prev];
+        merged[k] = { ...merged[k], cells: { ...merged[k].cells, ...step.row.cells } };
+        return merged;
+      });
+    }
+    if (step.block) setBlocks(prev => [...prev, step.block]);
+
+    const ni = i + 1;
+    setI(ni); setQi(0); setPicked([]); setPhase('ask');
+    if (ni >= steps.length) finish();
+  }
+
+  function finish() {
+    setDone(true);
+    if (reported) return;
+    setReported(true);
+    const uniq = [...new Set(missed)];
+    const base = mode === 'basic' ? 90 : 150;
+    const xp = Math.max(20, base - uniq.length * 8);
+    onFinish?.({ drill: 'npv', mode, xp, missed: uniq, npv });
+  }
+
+  const Y = NPV_YEARS;
+  const uniqMissed = [...new Set(missed)];
+  const flowRows = rows.filter(r => r.group === 'flow');
+  const onceRows = rows.filter(r => r.group === 'once');
+  const outRows  = rows.filter(r => r.group === 'out');
+  const colSum = [];
+  for (let y = 0; y <= Y; y++) colSum[y] = flowRows.reduce((a, r) => a + (r.cells[y] || 0), 0);
+
+  const gridCols = `84px repeat(${Y + 1}, minmax(40px, 1fr))`;
+  const cellBase = { fontSize: 10, textAlign: 'right', padding: '5px 2px', whiteSpace: 'nowrap' };
+  const labelBase = { fontSize: 10, color: C.text, padding: '5px 6px', lineHeight: 1.35 };
+
+  const matrixRow = (label, cells, opt = {}) => (
+    <div key={label + (opt.tag || '')} style={{
+      display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center',
+      borderTop: opt.top ? `1px solid ${C.border}` : 'none',
+      background: opt.bg || 'transparent',
+    }}>
+      <span style={{ ...labelBase, color: opt.labelColor || C.text, fontWeight: opt.bold ? 700 : 400 }}>{label}</span>
+      {Array.from({ length: Y + 1 }, (_, y) => {
+        const v = cells[y];
+        return (
+          <span key={y} style={{
+            ...cellBase,
+            fontWeight: opt.bold ? 700 : 400,
+            color: v === undefined || v === null ? C.border
+              : opt.bold ? C.text : v >= 0 ? C.green : C.red,
+          }}>{v === undefined || v === null ? '·' : npvSigned(v)}</span>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div style={{ padding: '16px 16px 80px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <button onClick={() => setMode(null)} style={{
+          background: 'none', border: 'none', color: C.purple, cursor: 'pointer',
+          fontSize: 22, padding: 0 }}>←</button>
+        <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: C.text }}>
+          {mode === 'basic' ? 'NPVドリル（基本）' : 'NPVドリル（設備更新）'}
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, textAlign: 'right', lineHeight: 1.4 }}>
+          単位：万円<br />割引率 {cse.rate}%・税率 {cse.tax}%
+        </div>
+      </div>
+
+      {/* 進捗 */}
+      <div style={{ display: 'flex', gap: 3, marginBottom: 14 }}>
+        {steps.map((_, k) => (
+          <div key={k} style={{
+            flex: 1, height: 3, borderRadius: 2,
+            background: k < i || done ? C.green : k === i ? C.gold : C.border,
+          }} />
+        ))}
+      </div>
+
+      {/* ① 年度別CF表 */}
+      <div style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+        marginBottom: 12, overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '9px 12px 8px', fontSize: 12, fontWeight: 700, color: C.accent,
+          borderBottom: `1px solid ${C.border}`,
+        }}>① 年度別キャッシュフロー表</div>
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: 324, padding: '4px 0' }}>
+            <div style={{
+              display: 'grid', gridTemplateColumns: gridCols,
+              borderBottom: `1px solid ${C.border}`, paddingBottom: 4, marginBottom: 2,
+            }}>
+              <span style={{ ...labelBase, color: C.muted, fontSize: 10 }}>項目</span>
+              {Array.from({ length: Y + 1 }, (_, y) => (
+                <span key={y} style={{ ...cellBase, color: C.muted, fontWeight: 700 }}>t={y}</span>
+              ))}
+            </div>
+
+            {rows.length === 0 && (
+              <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px', lineHeight: 1.6 }}>
+                判断した項目から順に、ここへ書き込まれます。
+              </div>
+            )}
+
+            {flowRows.length > 0 && (
+              <>
+                <div style={{ ...labelBase, fontSize: 10, color: C.accent, fontWeight: 700, paddingTop: 6 }}>
+                  {NPV_GROUP_LABEL.flow}
+                </div>
+                {flowRows.map(r => matrixRow(r.label, r.cells))}
+                {flowRows.length > 0 && matrixRow('定常CF計',
+                  Object.fromEntries(colSum.map((v, y) => [y, y === 0 ? null : v])),
+                  { top: true, bold: true, bg: '#0d1117', tag: 'sum' })}
+              </>
+            )}
+
+            {onceRows.length > 0 && (
+              <>
+                <div style={{ ...labelBase, fontSize: 10, color: C.purple, fontWeight: 700, paddingTop: 8 }}>
+                  {NPV_GROUP_LABEL.once}
+                </div>
+                {onceRows.map(r => matrixRow(r.label, r.cells))}
+              </>
+            )}
+          </div>
+        </div>
+
+        {outRows.length > 0 && (
+          <div style={{ borderTop: `1px solid ${C.border}`, padding: '7px 12px 9px' }}>
+            <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, marginBottom: 3 }}>
+              {NPV_GROUP_LABEL.out}
+            </div>
+            {outRows.map(r => (
+              <div key={r.label} style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
+                ・{r.label}　<span style={{ opacity: 0.8 }}>{r.note}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ② 割引ブロック表 */}
+      {blocks.length > 0 && (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+          marginBottom: 16, overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '9px 12px 8px', fontSize: 12, fontWeight: 700, color: C.purple,
+            borderBottom: `1px solid ${C.border}`,
+          }}>② まとめて割り引く</div>
+          <div style={{ padding: '4px 0' }}>
+            {blocks.map((b, k) => (
+              <div key={k} style={{ padding: '6px 12px' }}>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{b.label}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: C.text }}>
+                    {npvSigned(b.cf)} × {b.factorLabel}
+                    <span style={{ color: C.muted, fontSize: 10 }}>　{b.sub}</span>
+                  </span>
+                  <span style={{
+                    fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+                    color: b.cf * b.factor >= 0 ? C.green : C.red,
+                  }}>{npvSigned(b.cf * b.factor)}</span>
+                </div>
+              </div>
+            ))}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', padding: '9px 12px 8px',
+              marginTop: 4, borderTop: `1px solid ${C.border}`, background: C.purple + '1a',
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>
+                NPV{blocks.length < (mode === 'basic' ? 3 : 4) ? '（途中）' : ''}
+              </span>
+              <span style={{
+                fontSize: 16, fontWeight: 700,
+                color: blocks.reduce((a, b) => a + b.cf * b.factor, 0) >= 0 ? C.green : C.red,
+              }}>{npvSigned(blocks.reduce((a, b) => a + b.cf * b.factor, 0))}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 結果 */}
+      {done ? (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: '24px 18px',
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>{uniqMissed.length === 0 ? '🎉' : '📝'}</div>
+            <div style={{ fontSize: 13, color: C.muted }}>正味現在価値（NPV）</div>
+            <div style={{
+              fontSize: 32, fontWeight: 700, marginTop: 2,
+              color: uniqMissed.length === 0 ? C.gold : C.purple,
+            }}>{npvSigned(npv)}</div>
+            <div style={{ fontSize: 13, color: npv > 0 ? C.green : C.red, fontWeight: 700, marginTop: 4 }}>
+              {npv > 0 ? '→ 投資すべき' : '→ 投資すべきでない'}
+            </div>
+          </div>
+
+          <div style={{
+            background: '#0d1117', borderRadius: 10, padding: '12px 14px',
+            marginBottom: 18, fontSize: 13, color: C.text, lineHeight: 1.7,
+          }}>
+            {uniqMissed.length === 0
+              ? '全項目ノーミス。次は割引率と税率を変えて、表を書く順番が手に入っているか試してください。'
+              : (<>つまずいた項目
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: C.muted }}>
+                    {uniqMissed.map(m => <li key={m} style={{ margin: '3px 0' }}>{m}</li>)}
+                  </ul>
+                </>)}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={again} style={{
+              flex: 1, padding: '13px', borderRadius: 10, border: `1px solid ${C.purple}`,
+              background: 'transparent', color: C.purple, fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}>別の数字でもう一度</button>
+            <button onClick={() => setMode(null)} style={{
+              flex: 1, padding: '13px', borderRadius: 10, border: 'none',
+              background: C.purple, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}>ドリル一覧へ</button>
+          </div>
+        </div>
+      ) : step && q ? (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`,
+          borderLeft: `3px solid ${step.phase === 'table' ? C.accent : C.purple}`,
+          borderRadius: 14, padding: '16px 15px',
+        }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
+            paddingBottom: 12, marginBottom: 14, borderBottom: `1px dashed ${C.border}`,
+          }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1.4 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, marginRight: 7, padding: '2px 6px', borderRadius: 5,
+                background: (step.phase === 'table' ? C.accent : C.purple) + '26',
+                color: step.phase === 'table' ? C.accent : C.purple,
+              }}>{step.phase === 'table' ? '①表を書く' : '②割り引く'}</span>
+              {step.name}
+            </span>
+            {step.amt !== undefined && (
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.gold, whiteSpace: 'nowrap' }}>
+                {step.amt.toLocaleString()}
+              </span>
+            )}
+          </div>
+
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>{q.step}</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 14, lineHeight: 1.6 }}>{q.q}</div>
+
+          {q.opts.map((o, k) => {
+            const wrong = picked.includes(k) && !o.ok;
+            const right = (phase === 'right' && picked.includes(k) && o.ok) || (phase === 'reveal' && o.ok);
+            return (
+              <button key={k} onClick={() => choose(k)} disabled={phase !== 'ask' || wrong}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '12px 13px', marginBottom: 8, borderRadius: 10,
+                  border: `1px solid ${right ? C.green : wrong ? C.red : C.border}`,
+                  background: right ? C.green + '1f' : wrong ? C.red + '18' : '#0d1117',
+                  color: C.text, fontSize: 14, lineHeight: 1.55,
+                  cursor: phase === 'ask' && !wrong ? 'pointer' : 'default',
+                  fontFamily: 'inherit',
+                }}>{o.t}</button>
+            );
+          })}
+
+          {phase === 'ask' && picked.length > 0 && (
+            <div style={{
+              marginTop: 12, padding: '12px 13px', borderRadius: 10,
+              background: C.red + '14', border: `1px solid ${C.red}44`, fontSize: 13, color: C.text, lineHeight: 1.7,
+            }}>
+              ちがいます。{step.phase === 'table'
+                ? '現金がいつ動くか、税引後でいくらかに戻って考えてみてください。'
+                : '同額が続く区間はどこまでか、その係数は表のどこから作れるかで考えてみてください。'}
+            </div>
+          )}
+
+          {(phase === 'right' || phase === 'reveal') && (
+            <>
+              <div style={{
+                marginTop: 12, padding: '12px 13px', borderRadius: 10,
+                background: phase === 'right' ? C.green + '14' : C.red + '14',
+                border: `1px solid ${phase === 'right' ? C.green : C.red}44`,
+                fontSize: 13, color: C.text, lineHeight: 1.7,
+              }}>
+                <div style={{
+                  fontWeight: 700, marginBottom: 3,
+                  color: phase === 'right' ? C.green : C.red,
+                }}>{phase === 'right' ? 'そのとおり' : '正解はこちら'}</div>
+                {q.why}
+              </div>
+              <button onClick={next} style={{
+                marginTop: 12, width: '100%', padding: 13, borderRadius: 10, border: 'none',
+                background: phase === 'right' ? C.purple : C.border,
+                color: phase === 'right' ? '#fff' : C.text,
+                fontWeight: 700, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                {qi + 1 < step.qs.length ? '次の分岐へ'
+                  : step.phase === 'table' ? '表に書き込む' : '計算に反映する'}
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillComplete }) {
   const [view, setView]                   = useState('list');
   const [selectedCase, setSelectedCase]   = useState('case4');
@@ -4649,8 +5420,12 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillCompl
   });
 
   // ---- List view ----
-  if (view === 'drill') {
+  if (view === 'drill_cf') {
     return <CFDrill onFinish={onDrillComplete} onExit={() => setView('list')} />;
+  }
+
+  if (view === 'drill_npv') {
+    return <NpvDrill onFinish={onDrillComplete} onExit={() => setView('list')} />;
   }
 
   if (view === 'list') {
@@ -4875,23 +5650,33 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillCompl
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>ステップ別選択問題</div>
 
             {!isCaseStudy && (
-              <div
-                onClick={() => setView('drill')}
-                style={{
-                  background: `linear-gradient(135deg, ${C.accent}22, ${C.purple}22)`,
-                  border: `1px solid ${C.accent}66`, borderRadius: 14,
-                  padding: '14px 16px', marginBottom: 16, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 14,
-                }}
-              >
-                <div style={{ fontSize: 26 }}>⚡</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>間接法CFドリル</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
-                    数字が毎回変わる。符号を判断すると台帳が積み上がります
+              <div style={{ marginBottom: 16 }}>
+                {[
+                  { id: 'drill_cf',  icon: '⚡', col: C.accent, title: '間接法CFドリル',
+                    desc: '数字が毎回変わる。符号を判断すると台帳が積み上がります' },
+                  { id: 'drill_npv', icon: '💹', col: C.purple, title: 'NPVドリル',
+                    desc: '試験と同じ順番。CF表を書き、年金現価係数の引き算でまとめて割り引く' },
+                ].map(d => (
+                  <div
+                    key={d.id}
+                    onClick={() => setView(d.id)}
+                    style={{
+                      background: `linear-gradient(135deg, ${d.col}22, ${C.purple}18)`,
+                      border: `1px solid ${d.col}66`, borderRadius: 14,
+                      padding: '14px 16px', marginBottom: 8, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 14,
+                    }}
+                  >
+                    <div style={{ fontSize: 26 }}>{d.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{d.title}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
+                        {d.desc}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 18, color: d.col }}>›</div>
                   </div>
-                </div>
-                <div style={{ fontSize: 18, color: C.accent }}>›</div>
+                ))}
               </div>
             )}
 
@@ -5363,18 +6148,25 @@ export default function App() {
     }
   }
 
-  function handleDrillComplete({ mode, xp, missed }) {
-    const label = mode === 'op' ? '間接法CFドリル（営業CF）' : '間接法CFドリル（3区分）';
-    const prev = data.drillProgress?.[mode] || { attempts: 0, bestXp: 0 };
+  function handleDrillComplete({ drill = 'cf', mode, xp, missed }) {
+    const LABELS = {
+      cf_op:      ['⚡', '間接法CFドリル（営業CF）'],
+      cf_full:    ['⚡', '間接法CFドリル（3区分）'],
+      npv_basic:  ['💹', 'NPVドリル（基本）'],
+      npv_full:   ['💹', 'NPVドリル（設備更新）'],
+    };
+    const key = `${drill}_${mode}`;
+    const [icon, label] = LABELS[key] || ['⚡', 'ドリル'];
+    const prev = data.drillProgress?.[key] || { attempts: 0, bestXp: 0 };
     let d = {
       ...data,
       drillProgress: {
         ...data.drillProgress,
-        [mode]: { attempts: prev.attempts + 1, bestXp: Math.max(prev.bestXp, xp) },
+        [key]: { attempts: prev.attempts + 1, bestXp: Math.max(prev.bestXp, xp) },
       },
     };
     const prevLevel = getLevel(data.xp);
-    const hi = buildHistoryItem('⚡', label, xp);
+    const hi = buildHistoryItem(icon, label, xp);
     d = applyXpGain(d, xp, hi);
     commit(d);
     const newLevel = getLevel(d.xp);
