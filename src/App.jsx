@@ -3923,6 +3923,7 @@ function HistoryTab({ data }) {
 // ============================================================
 
 const CF_SEC = { op: C.accent, inv: C.purple, fin: C.orange };
+const CF_SEC_TAG = { op: '営業', inv: '投資', fin: '財務' };
 
 function cfRnd(min, max, step) {
   return min + Math.floor(Math.random() * ((max - min) / step + 1)) * step;
@@ -4094,7 +4095,7 @@ function buildCfSteps(c, mode) {
       opts: [
         { t: '足す（＋）', ok: true },
         { t: '差し引く（−）' }],
-      why: '実際に受け取った現金なので素直に＋。' }] });
+      why: '小計より下は「実際に動いた現金」を並べる場所。受け取った金額そのものを＋で計上する。上で一度−して消しているので、これで発生額ではなく収支額に置き換わる。' }] });
 
   push({ name: '利息の支払額', amt: c.intPaid, sign: -1, qs: [
     { step: '1／2　なぜ違うか', q: '上で足し戻した支払利息 ' + c.intExp.toLocaleString() + ' と、この支払額 ' + c.intPaid.toLocaleString() + ' が一致しないのはなぜか。',
@@ -4107,7 +4108,7 @@ function buildCfSteps(c, mode) {
       opts: [
         { t: '差し引く（−）', ok: true },
         { t: '足す（＋）' }],
-      why: '現金が出ていったので−。' }] });
+      why: '現金が実際に出ていったので−。上で＋'+c.intExp.toLocaleString()+'として消し、ここで実際の支払額−'+c.intPaid.toLocaleString()+'を立てる。この二段構えで発生主義から現金主義へ置き換わる。' }] });
 
   push({ name: '法人税等の支払額', amt: c.tax, sign: -1, qs: [
     { step: '符号', q: '符号は。',
@@ -4145,7 +4146,7 @@ function buildCfSteps(c, mode) {
       opts: [
         { t: '足す（＋）', ok: true },
         { t: '差し引く（−）' }],
-      why: '現金が入ってきたので＋。' }] });
+      why: '現金が実際に入ってきたので＋。営業CFで売却益を−して消したのは、ここで入金額の全額を計上するため。上で消して下で実額、という利息とまったく同じ組み立て。' }] });
 
   pushI({ name: '投資有価証券の取得による支出', amt: c.buySec, sign: -1, qs: [
     { step: '区分', q: 'この支出はどの区分か。',
@@ -4211,92 +4212,133 @@ function buildCfSteps(c, mode) {
   return s;
 }
 
-function cfPostAuto(steps, idx, curRun, curRows, curTotals) {
-  let n = idx, r = curRun;
-  const rw = [...curRows], tt = [...curTotals];
-  while (n < steps.length && steps[n].auto) {
-    const st = steps[n];
-    if (st.kind === 'sec') {
-      rw.push({ ...st, display: null });
-      r = 0;
-    } else if (st.kind === 'total') {
-      rw.push({ ...st, display: r, running: r });
-      tt.push({ sec: st.sec, name: st.name, value: r });
-      r = 0;
-    }
-    n++;
-  }
-  return { n, r, rw, tt };
+// ============================================================
+// ドリル共通エンジン
+// ------------------------------------------------------------
+// 各ドリルは「ケース（数値）を作る → ステップ列を作る → ステップを
+// 台帳に反映する」の3つを渡すだけでよい。モード選択・進捗バー・
+// 設問カード・誤答時の再挑戦・結果画面はここが持つ。
+// ============================================================
+
+function drillRnd(min, max, step) {
+  return min + Math.floor(Math.random() * ((max - min) / step + 1)) * step;
 }
 
-function CFDrill({ onFinish, onExit }) {
-  const [mode, setMode]   = useState(null);
-  const [seed, setSeed]   = useState(0);
-  const [cse, setCse]     = useState(null);
-  const [steps, setSteps] = useState([]);
+function drillPick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function drillShuffle(opts) {
+  const a = opts.map(o => ({ ...o }));
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ステップ配列を作るときのヘルパ。選択肢を必ずシャッフルして積む。
+function drillSteps() {
+  const s = [];
+  s.push = ((orig) => function (o) {
+    return orig.call(this, { ...o, qs: (o.qs || []).map(q => ({ ...q, opts: drillShuffle(q.opts) })) });
+  })(s.push);
+  return s;
+}
+
+function drillNum(n, digits = 1) {
+  const p = Math.pow(10, digits);
+  return (Math.round(n * p) / p).toLocaleString('ja-JP', { maximumFractionDigits: digits });
+}
+
+function drillSigned(n, digits = 1) {
+  return (n < 0 ? '−' : '＋') + drillNum(Math.abs(n), digits);
+}
+
+function drillInt(n) {
+  return Math.round(n).toLocaleString('ja-JP');
+}
+
+function drillPct(n, digits = 1) {
+  return drillNum(n, digits) + '%';
+}
+
+/**
+ * 汎用ドリル画面。
+ *
+ * props
+ *   meta        { key, icon, title, lead, accent }
+ *   modes       [{ id, icon, title, desc, xp }]
+ *   build       (modeId) => { steps, ledger, info }
+ *   applyStep   (ledger, step, info) => ledger        ステップ確定時の台帳更新
+ *   renderLedger(ledger, info, done) => JSX           台帳の描画
+ *   renderResult(ledger, info, missed) => JSX         結果画面の中身
+ *   headerNote  (info) => string                      ヘッダ右上の注記
+ *   hint        (step) => string                      誤答時のヒント
+ *   nextLabel   (step, isLastQ) => string             次へボタンの文言
+ */
+function DrillRunner({
+  meta, modes, build, applyStep, renderLedger, renderResult,
+  headerNote, hint, nextLabel, onFinish, onExit,
+}) {
+  const [mode, setMode]     = useState(null);
+  const [steps, setSteps]   = useState([]);
+  const [info, setInfo]     = useState(null);
+  const [ledger, setLedger] = useState(null);
 
   const [i, setI]           = useState(0);
   const [qi, setQi]         = useState(0);
-  const [rows, setRows]     = useState([]);
-  const [run, setRun]       = useState(0);
-  const [totals, setTotals] = useState([]);
   const [missed, setMissed] = useState([]);
   const [picked, setPicked] = useState([]);
   const [phase, setPhase]   = useState('ask');
   const [done, setDone]     = useState(false);
   const [reported, setReported] = useState(false);
 
+  const accent = meta.accent || C.accent;
+
   function begin(m) {
-    const c = buildCfCase();
-    const st = buildCfSteps(c, m);
-    const seeded = cfPostAuto(st, 0, 0, [], []);
-    setCse(c);
-    setSteps(st);
-    setMode(m);
-    setI(seeded.n); setQi(0); setRows(seeded.rw); setRun(seeded.r); setTotals(seeded.tt);
+    const built = build(m);
+    setSteps(built.steps); setInfo(built.info); setLedger(built.ledger);
+    setMode(m); setI(0); setQi(0);
     setMissed([]); setPicked([]); setPhase('ask'); setDone(false); setReported(false);
   }
 
-  function again() { setSeed(seed + 1); begin(mode); }
-
-  // ---- mode select ----
   if (!mode) {
-    const card = (id, icon, title, desc, xp) => (
-      <div key={id} onClick={() => begin(id)} style={{
-        background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-        padding: 16, marginBottom: 12, cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'center',
-      }}>
-        <div style={{ fontSize: 28 }}>{icon}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>{desc}</div>
-          <div style={{ fontSize: 11, color: C.gold, marginTop: 5, fontWeight: 700 }}>最大 ＋{xp} XP</div>
-        </div>
-      </div>
-    );
     return (
       <div style={{ padding: '16px 16px 80px' }}>
         <button onClick={onExit} style={{
-          background: 'none', border: 'none', color: C.accent, cursor: 'pointer',
+          background: 'none', border: 'none', color: accent, cursor: 'pointer',
           fontSize: 22, padding: 0, marginBottom: 16 }}>←</button>
-        <div style={{ fontSize: 19, fontWeight: 700, color: C.text, marginBottom: 6 }}>⚡ 間接法CFドリル</div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.7 }}>
-          項目を1つずつ「現金は動いたか → どの活動か → だから符号は」の順で判断する。
-          金額は毎回変わり、計算はドリルが積み上げます。
+        <div style={{ fontSize: 19, fontWeight: 700, color: C.text, marginBottom: 6 }}>
+          {meta.icon} {meta.title}
         </div>
-        {card('op',   '💧', '営業CF（間接法）',      '税引前当期純利益から小計を経て営業CFまで。13項目。', 90)}
-        {card('full', '🧾', 'フルセット（3区分）',   '営業・投資・財務の3区分をまとめて組み立てる。21項目。', 150)}
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.7 }}>{meta.lead}</div>
+        {modes.map(m => (
+          <div key={m.id} onClick={() => begin(m.id)} style={{
+            background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+            padding: 16, marginBottom: 12, cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'center',
+          }}>
+            <div style={{ fontSize: 28 }}>{m.icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{m.title}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>{m.desc}</div>
+              <div style={{ fontSize: 11, color: C.gold, marginTop: 5, fontWeight: 700 }}>最大 ＋{m.xp} XP</div>
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
   const step = steps[i];
   const q = step ? step.qs[qi] : null;
+  const modeDef = modes.find(m => m.id === mode);
+  const uniqMissed = [...new Set(missed)];
 
-  function choose(n) {
+  function choose(k) {
     if (phase !== 'ask') return;
-    const opt = q.opts[n];
-    setPicked([...picked, n]);
+    const opt = q.opts[k];
+    setPicked([...picked, k]);
     if (opt.ok) { setPhase('right'); return; }
     setMissed([...missed, step.name]);
     if (picked.length > 0) setPhase('reveal');
@@ -4304,158 +4346,60 @@ function CFDrill({ onFinish, onExit }) {
 
   function next() {
     if (qi + 1 < step.qs.length) { setQi(qi + 1); setPicked([]); setPhase('ask'); return; }
-
-    const signed = step.amt * step.sign;
-    const nextRun = step.kind === 'sub' ? run : run + signed;
-    const row = {
-      ...step,
-      display: step.kind === 'sub' ? run : signed,
-      running: nextRun,
-    };
-    const res = cfPostAuto(steps, i + 1, nextRun, [...rows, row], totals);
-
-    setRows(res.rw); setRun(res.r); setTotals(res.tt);
-    setI(res.n); setQi(0); setPicked([]); setPhase('ask');
-
-    if (res.n >= steps.length) finish(res.tt);
+    const nl = applyStep(ledger, step, info);
+    setLedger(nl);
+    const ni = i + 1;
+    setI(ni); setQi(0); setPicked([]); setPhase('ask');
+    if (ni >= steps.length) {
+      setDone(true);
+      if (!reported) {
+        setReported(true);
+        const uniq = [...new Set(missed)];
+        const xp = Math.max(20, modeDef.xp - uniq.length * 8);
+        onFinish?.({ drill: meta.key, mode, xp, missed: uniq, label: `${meta.title}（${modeDef.title}）` });
+      }
+    }
   }
-
-  function finish(tt) {
-    setDone(true);
-    if (reported) return;
-    setReported(true);
-    const uniq = [...new Set(missed)];
-    const base = mode === 'op' ? 90 : 150;
-    const xp = Math.max(20, base - uniq.length * 8);
-    onFinish?.({ drill: 'cf', mode, xp, missed: uniq, totals: tt });
-  }
-
-  const opTotal  = totals.find(t => t.sec === 'op')?.value ?? 0;
-  const invTotal = totals.find(t => t.sec === 'inv')?.value ?? 0;
-  const finTotal = totals.find(t => t.sec === 'fin')?.value ?? 0;
-  const netChange = opTotal + invTotal + finTotal;
-  const uniqMissed = [...new Set(missed)];
 
   return (
     <div style={{ padding: '16px 16px 80px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
         <button onClick={() => setMode(null)} style={{
-          background: 'none', border: 'none', color: C.accent, cursor: 'pointer',
+          background: 'none', border: 'none', color: accent, cursor: 'pointer',
           fontSize: 22, padding: 0 }}>←</button>
         <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: C.text }}>
-          {mode === 'op' ? '営業CF（間接法）' : 'フルセット（3区分）'}
+          {meta.title}（{modeDef.title}）
         </div>
-        <div style={{ fontSize: 12, color: C.muted }}>単位：万円</div>
-      </div>
-
-      {/* 進捗 */}
-      <div style={{ display: 'flex', gap: 3, marginBottom: 14 }}>
-        {steps.filter(x => !x.auto).map((x, n) => {
-          const idx = steps.filter(y => !y.auto).indexOf(x);
-          const cur = steps.filter(y => !y.auto).findIndex(y => y === step);
-          return (
-            <div key={n} style={{
-              flex: 1, height: 3, borderRadius: 2,
-              background: idx < cur || done ? C.green : idx === cur ? C.gold : C.border,
-            }} />
-          );
-        })}
-      </div>
-
-      {/* 台帳 */}
-      <div style={{
-        background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-        padding: '6px 0', marginBottom: 16, maxHeight: 300, overflowY: 'auto',
-      }}>
-        {rows.length === 0 && (
-          <div style={{ color: C.muted, fontSize: 12, padding: '12px 14px' }}>
-            判断した項目から順に、ここへ積み上がります。
+        {headerNote && (
+          <div style={{ fontSize: 11, color: C.muted, textAlign: 'right', lineHeight: 1.4 }}>
+            {headerNote(info)}
           </div>
         )}
-        {rows.map((r, n) => {
-          const col = CF_SEC[r.sec] || C.accent;
-          if (r.kind === 'sec') {
-            return (
-              <div key={n} style={{
-                padding: '8px 14px 6px', fontSize: 12, fontWeight: 700, color: col,
-                borderBottom: `1px solid ${C.border}`,
-              }}>{r.name}</div>
-            );
-          }
-          const isTotal = r.kind === 'total';
-          const isSub   = r.kind === 'sub';
-          const isHead  = r.kind === 'head';
-          return (
-            <div key={n} style={{
-              display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10,
-              alignItems: 'baseline', padding: '6px 14px', fontSize: 13,
-              background: isTotal ? col + '1f' : isSub ? '#0d1117' : 'transparent',
-              borderTop: isSub || isTotal ? `1px solid ${C.border}` : 'none',
-              fontWeight: isTotal || isSub ? 700 : 400,
-            }}>
-              <span style={{ color: isTotal ? col : C.text }}>{r.name}</span>
-              <span style={{
-                fontSize: isTotal ? 16 : 14, fontWeight: 700,
-                color: isTotal ? col : isSub || isHead ? C.text
-                  : r.display >= 0 ? C.green : C.red,
-              }}>
-                {isTotal || isSub || isHead
-                  ? Number(r.display).toLocaleString()
-                  : cfSigned(r.display)}
-              </span>
-              <span style={{ fontSize: 11, color: C.muted, minWidth: 60, textAlign: 'right' }}>
-                {isTotal || isSub ? '' : Number(r.running).toLocaleString()}
-              </span>
-            </div>
-          );
-        })}
       </div>
 
-      {/* 結果 */}
+      <div style={{ display: 'flex', gap: 3, marginBottom: 14 }}>
+        {steps.map((_, k) => (
+          <div key={k} style={{
+            flex: 1, height: 3, borderRadius: 2,
+            background: k < i || done ? C.green : k === i ? C.gold : C.border,
+          }} />
+        ))}
+      </div>
+
+      {renderLedger(ledger, info, done)}
+
       {done ? (
         <div style={{
           background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: '24px 18px',
         }}>
-          <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>{uniqMissed.length === 0 ? '🎉' : '📝'}</div>
-            <div style={{ fontSize: 13, color: C.muted }}>
-              {mode === 'op' ? '営業活動によるキャッシュ・フロー' : '現金及び現金同等物の増加額'}
-            </div>
-            <div style={{
-              fontSize: 32, fontWeight: 700, marginTop: 2,
-              color: uniqMissed.length === 0 ? C.gold : C.accent,
-            }}>
-              {(mode === 'op' ? opTotal : netChange).toLocaleString()}
-            </div>
-          </div>
-
-          {mode !== 'op' && (
-            <div style={{
-              background: '#0d1117', borderRadius: 10, padding: '12px 14px',
-              marginBottom: 14, fontSize: 13,
-            }}>
-              {[['営業CF', opTotal, CF_SEC.op], ['投資CF', invTotal, CF_SEC.inv], ['財務CF', finTotal, CF_SEC.fin]].map(([label, v, col]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
-                  <span style={{ color: col, fontWeight: 700 }}>{label}</span>
-                  <span style={{ color: v >= 0 ? C.green : C.red, fontWeight: 700 }}>{cfSigned(v)}</span>
-                </div>
-              ))}
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', padding: '8px 0 0',
-                marginTop: 6, borderTop: `1px solid ${C.border}`,
-              }}>
-                <span style={{ color: C.muted }}>期首残高 {cse.opening.toLocaleString()} → 期末残高</span>
-                <span style={{ color: C.text, fontWeight: 700 }}>{(cse.opening + netChange).toLocaleString()}</span>
-              </div>
-            </div>
-          )}
+          {renderResult(ledger, info, uniqMissed)}
 
           <div style={{
             background: '#0d1117', borderRadius: 10, padding: '12px 14px',
-            marginBottom: 18, fontSize: 13, color: C.text, lineHeight: 1.7,
+            margin: '18px 0', fontSize: 13, color: C.text, lineHeight: 1.7,
           }}>
             {uniqMissed.length === 0
-              ? '全項目ノーミス。次は数字を変えて、迷わず符号が出るかを試してください。'
+              ? '全項目ノーミス。次は数字を変えて、迷わず手が動くかを試してください。'
               : (<>つまずいた項目
                   <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: C.muted }}>
                     {uniqMissed.map(m => <li key={m} style={{ margin: '3px 0' }}>{m}</li>)}
@@ -4464,29 +4408,38 @@ function CFDrill({ onFinish, onExit }) {
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={again} style={{
-              flex: 1, padding: '13px', borderRadius: 10, border: `1px solid ${C.accent}`,
-              background: 'transparent', color: C.accent, fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            <button onClick={() => begin(mode)} style={{
+              flex: 1, padding: '13px', borderRadius: 10, border: `1px solid ${accent}`,
+              background: 'transparent', color: accent, fontWeight: 700, cursor: 'pointer', fontSize: 14,
             }}>別の数字でもう一度</button>
             <button onClick={() => setMode(null)} style={{
               flex: 1, padding: '13px', borderRadius: 10, border: 'none',
-              background: C.accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14,
-            }}>ドリル一覧へ</button>
+              background: accent, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}>モード選択へ</button>
           </div>
         </div>
       ) : step && q ? (
         <div style={{
           background: C.card, border: `1px solid ${C.border}`,
-          borderLeft: `3px solid ${CF_SEC[step.sec]}`, borderRadius: 14, padding: '16px 15px',
+          borderLeft: `3px solid ${step.accent || accent}`, borderRadius: 14, padding: '16px 15px',
         }}>
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
             paddingBottom: 12, marginBottom: 14, borderBottom: `1px dashed ${C.border}`,
           }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{step.name}</span>
-            {step.kind !== 'sub' && (
-              <span style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>
-                {step.amt.toLocaleString()}
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1.4 }}>
+              {step.tag && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, marginRight: 7, padding: '2px 6px', borderRadius: 5,
+                  background: (step.accent || accent) + '26', color: step.accent || accent,
+                  whiteSpace: 'nowrap',
+                }}>{step.tag}</span>
+              )}
+              {step.name}
+            </span>
+            {step.amt !== undefined && step.amt !== null && (
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.gold, whiteSpace: 'nowrap' }}>
+                {typeof step.amt === 'number' ? drillInt(step.amt) : step.amt}
               </span>
             )}
           </div>
@@ -4494,11 +4447,11 @@ function CFDrill({ onFinish, onExit }) {
           <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>{q.step}</div>
           <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 14, lineHeight: 1.6 }}>{q.q}</div>
 
-          {q.opts.map((o, n) => {
-            const wrong = picked.includes(n) && !o.ok;
-            const right = (phase === 'right' && picked.includes(n) && o.ok) || (phase === 'reveal' && o.ok);
+          {q.opts.map((o, k) => {
+            const wrong = picked.includes(k) && !o.ok;
+            const right = (phase === 'right' && picked.includes(k) && o.ok) || (phase === 'reveal' && o.ok);
             return (
-              <button key={n} onClick={() => choose(n)} disabled={phase !== 'ask' || wrong}
+              <button key={k} onClick={() => choose(k)} disabled={phase !== 'ask' || wrong}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left',
                   padding: '12px 13px', marginBottom: 8, borderRadius: 10,
@@ -4514,9 +4467,10 @@ function CFDrill({ onFinish, onExit }) {
           {phase === 'ask' && picked.length > 0 && (
             <div style={{
               marginTop: 12, padding: '12px 13px', borderRadius: 10,
-              background: C.red + '14', border: `1px solid ${C.red}44`, fontSize: 13, color: C.text,
+              background: C.red + '14', border: `1px solid ${C.red}44`,
+              fontSize: 13, color: C.text, lineHeight: 1.7,
             }}>
-              ちがいます。現金が実際に動いたかどうかで、もう一度考えてみてください。
+              ちがいます。{hint ? hint(step) : 'もう一度考えてみてください。'}
             </div>
           )}
 
@@ -4536,16 +4490,78 @@ function CFDrill({ onFinish, onExit }) {
               </div>
               <button onClick={next} style={{
                 marginTop: 12, width: '100%', padding: 13, borderRadius: 10, border: 'none',
-                background: phase === 'right' ? C.accent : C.border,
+                background: phase === 'right' ? accent : C.border,
                 color: phase === 'right' ? '#000' : C.text,
                 fontWeight: 700, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit',
               }}>
-                {qi + 1 < step.qs.length ? '次の分岐へ' : '台帳に記入する'}
+                {qi + 1 < step.qs.length ? '次の分岐へ' : (nextLabel ? nextLabel(step) : '台帳に記入する')}
               </button>
             </>
           )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ドリル登録簿。演習タブの一覧・履歴アイコン・進捗キーはここを見る。
+const DRILL_LIST = [
+  { key: 'analysis', icon: '📉', color: C.orange, title: '経営分析ドリル',
+    desc: '第1問の型。財務諸表から指摘すべき指標を選び、計算して優劣を判断する' },
+  { key: 'cvp',      icon: '📊', color: C.accent, title: 'CVPドリル',
+    desc: '高低点法で固変分解し、変動損益計算書からBEP・安全余裕率まで' },
+  { key: 'diff',     icon: '⚖️', color: C.gold,   title: '差額原価ドリル',
+    desc: '関連原価と埋没原価を仕分けて、受けるか断るかを差額で決める' },
+  { key: 'npv',      icon: '💹', color: C.purple, title: 'NPVドリル',
+    desc: 'CF表を書き、年金現価係数の引き算でまとめて割り引く' },
+  { key: 'replace',  icon: '🔄', color: C.green,  title: '取替投資ドリル',
+    desc: '旧設備を使い続ける案と新設備案を、差額キャッシュフローで比べる' },
+  { key: 'cf',       icon: '⚡', color: C.accent, title: '間接法CFドリル',
+    desc: '現金は動いたか・どの活動か・だから符号は。CF計算書を組み立てる' },
+  { key: 'wacc',     icon: '🏦', color: C.purple, title: '資本コストドリル',
+    desc: 'CAPMで株主資本コストを出し、WACCから企業価値まで積み上げる' },
+  { key: 'risk',     icon: '🎲', color: C.orange, title: 'リスク評価ドリル',
+    desc: '期待値・標準偏差・変動係数と、デシジョンツリーの後ろ向き解き' },
+  { key: 'cost',     icon: '📦', color: C.green,  title: '原価・在庫ドリル',
+    desc: 'EOQ・標準原価の差異分析・全部原価計算と直接原価計算の利益差' },
+  { key: 'fx',       icon: '💱', color: C.gold,   title: '為替リスクドリル',
+    desc: '為替予約・オプション・マリー・ネッティングの使い分け' },
+];
+
+// 台帳カード（見出し＋中身）の共通枠
+function DrillCard({ title, color, children, style }) {
+  return (
+    <div style={{
+      background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+      marginBottom: 12, overflow: 'hidden', ...style,
+    }}>
+      <div style={{
+        padding: '9px 12px 8px', fontSize: 12, fontWeight: 700, color,
+        borderBottom: `1px solid ${C.border}`,
+      }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+// 「項目 / 金額 / 補足」の3列行
+function DrillRow({ label, value, note, color, bold, top, bg, valueColor }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'baseline',
+      padding: '6px 12px', fontSize: 13,
+      borderTop: top ? `1px solid ${C.border}` : 'none',
+      background: bg || 'transparent',
+      fontWeight: bold ? 700 : 400,
+    }}>
+      <span style={{ color: color || C.text, lineHeight: 1.45 }}>
+        {label}
+        {note && <span style={{ color: C.muted, fontSize: 10, marginLeft: 6 }}>{note}</span>}
+      </span>
+      <span style={{
+        fontSize: bold ? 15 : 13, fontWeight: 700, whiteSpace: 'nowrap',
+        color: valueColor || (bold ? C.text : C.text),
+      }}>{value}</span>
     </div>
   );
 }
@@ -4932,106 +4948,212 @@ function buildNpvSteps(c) {
   return { steps: s, npv, rate: c.rate };
 }
 
-function NpvDrill({ onFinish, onExit }) {
-  const [mode, setMode]     = useState(null);
-  const [cse, setCse]       = useState(null);
-  const [steps, setSteps]   = useState([]);
-  const [npv, setNpv]       = useState(0);
-
-  const [i, setI]           = useState(0);
-  const [qi, setQi]         = useState(0);
-  const [rows, setRows]     = useState([]);
-  const [blocks, setBlocks] = useState([]);
-  const [missed, setMissed] = useState([]);
-  const [picked, setPicked] = useState([]);
-  const [phase, setPhase]   = useState('ask');
-  const [done, setDone]     = useState(false);
-  const [reported, setReported] = useState(false);
-
-  function begin(m) {
-    const c = buildNpvCase(m);
-    const built = buildNpvSteps(c);
-    setCse(c); setSteps(built.steps); setNpv(built.npv); setMode(m);
-    setI(0); setQi(0); setRows([]); setBlocks([]);
-    setMissed([]); setPicked([]); setPhase('ask'); setDone(false); setReported(false);
-  }
-
-  function again() { begin(mode); }
-
-  // ---- mode select ----
-  if (!mode) {
-    const card = (id, icon, title, desc, xp) => (
-      <div key={id} onClick={() => begin(id)} style={{
-        background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-        padding: 16, marginBottom: 12, cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'center',
-      }}>
-        <div style={{ fontSize: 28 }}>{icon}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>{desc}</div>
-          <div style={{ fontSize: 11, color: C.gold, marginTop: 5, fontWeight: 700 }}>最大 ＋{xp} XP</div>
-        </div>
-      </div>
-    );
-    return (
-      <div style={{ padding: '16px 16px 80px' }}>
-        <button onClick={onExit} style={{
-          background: 'none', border: 'none', color: C.purple, cursor: 'pointer',
-          fontSize: 22, padding: 0, marginBottom: 16 }}>←</button>
-        <div style={{ fontSize: 19, fontWeight: 700, color: C.text, marginBottom: 6 }}>💹 NPVドリル</div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.7 }}>
-          試験の答案と同じ順番で進めます。まず年度別のCF表を書き、同じ金額が続く区間を
-          年金現価係数の引き算でまとめて割り引く。金額・割引率・税率は毎回変わります。
-        </div>
-        {card('basic', '📊', '表を書いてまとめて割り引く', '取得支出・タックスシールド・支払利息の扱いから、年金現価係数の引き算まで。10項目18問。', 90)}
-        {card('full',  '🏭', 'フルセット（設備更新）',     '旧設備の売却・運転資本・埋没原価・機会原価・残存価値まで含めた設備更新投資。17項目30問。', 150)}
-      </div>
-    );
-  }
-
-  const step = steps[i];
-  const q = step ? step.qs[qi] : null;
-
-  function choose(k) {
-    if (phase !== 'ask') return;
-    const opt = q.opts[k];
-    setPicked([...picked, k]);
-    if (opt.ok) { setPhase('right'); return; }
-    setMissed([...missed, step.name]);
-    if (picked.length > 0) setPhase('reveal');
-  }
-
-  function next() {
-    if (qi + 1 < step.qs.length) { setQi(qi + 1); setPicked([]); setPhase('ask'); return; }
-
-    if (step.row) {
-      setRows(prev => {
-        const k = prev.findIndex(r => r.label === step.row.label);
-        if (k < 0) return [...prev, { ...step.row }];
-        const merged = [...prev];
-        merged[k] = { ...merged[k], cells: { ...merged[k].cells, ...step.row.cells } };
-        return merged;
-      });
+// 自動行（区分見出し・合計行）を直前の実ステップにぶら下げる形へ畳む
+function cfPack(raw) {
+  const lead = [];
+  const steps = [];
+  for (const st of raw) {
+    if (st.auto) {
+      if (steps.length === 0) lead.push(st);
+      else steps[steps.length - 1].post.push(st);
+    } else {
+      steps.push({ ...st, post: [], accent: CF_SEC[st.sec], tag: CF_SEC_TAG[st.sec] });
     }
-    if (step.block) setBlocks(prev => [...prev, step.block]);
-
-    const ni = i + 1;
-    setI(ni); setQi(0); setPicked([]); setPhase('ask');
-    if (ni >= steps.length) finish();
   }
+  return { lead, steps };
+}
 
-  function finish() {
-    setDone(true);
-    if (reported) return;
-    setReported(true);
-    const uniq = [...new Set(missed)];
-    const base = mode === 'basic' ? 90 : 150;
-    const xp = Math.max(20, base - uniq.length * 8);
-    onFinish?.({ drill: 'npv', mode, xp, missed: uniq, npv });
+function cfEmitAuto(rows, totals, run, autos) {
+  let r = run;
+  const rw = [...rows], tt = [...totals];
+  for (const st of autos) {
+    if (st.kind === 'sec') { rw.push({ ...st, display: null }); r = 0; }
+    else if (st.kind === 'total') {
+      rw.push({ ...st, display: r, running: r });
+      tt.push({ sec: st.sec, name: st.name, value: r });
+      r = 0;
+    }
   }
+  return { rows: rw, totals: tt, run: r };
+}
 
+function CFDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish}
+      onExit={onExit}
+      meta={{
+        key: 'cf', icon: '⚡', title: '間接法CFドリル', accent: C.accent,
+        lead: '項目を1つずつ「現金は動いたか → どの活動か → だから符号は」の順で判断する。金額は毎回変わり、計算はドリルが積み上げます。',
+      }}
+      modes={[
+        { id: 'op',   icon: '💧', title: '営業CF（間接法）',    desc: '税引前当期純利益から小計を経て営業CFまで。13項目。', xp: 90 },
+        { id: 'full', icon: '🧾', title: 'フルセット（3区分）', desc: '営業・投資・財務の3区分をまとめて組み立てる。21項目。', xp: 150 },
+      ]}
+      build={(m) => {
+        const cse = buildCfCase();
+        const { lead, steps } = cfPack(buildCfSteps(cse, m));
+        return { steps, info: { cse, mode: m }, ledger: cfEmitAuto([], [], 0, lead) };
+      }}
+      applyStep={(ledger, step) => {
+        const signed = step.amt * step.sign;
+        const nextRun = step.kind === 'sub' ? ledger.run : ledger.run + signed;
+        const row = { ...step, display: step.kind === 'sub' ? ledger.run : signed, running: nextRun };
+        return cfEmitAuto([...ledger.rows, row], ledger.totals, nextRun, step.post);
+      }}
+      headerNote={() => '単位：万円'}
+      hint={() => '現金が実際に動いたかどうかで、もう一度考えてみてください。'}
+      nextLabel={() => '台帳に記入する'}
+      renderLedger={(ledger) => (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
+          padding: '6px 0', marginBottom: 16, maxHeight: 300, overflowY: 'auto',
+        }}>
+          {ledger.rows.length === 0 && (
+            <div style={{ color: C.muted, fontSize: 12, padding: '12px 14px' }}>
+              判断した項目から順に、ここへ積み上がります。
+            </div>
+          )}
+          {ledger.rows.map((r, n) => {
+            const col = CF_SEC[r.sec] || C.accent;
+            if (r.kind === 'sec') {
+              return (
+                <div key={n} style={{
+                  padding: '8px 14px 6px', fontSize: 12, fontWeight: 700, color: col,
+                  borderBottom: `1px solid ${C.border}`,
+                }}>{r.name}</div>
+              );
+            }
+            const isTotal = r.kind === 'total';
+            const isSub   = r.kind === 'sub';
+            const isHead  = r.kind === 'head';
+            return (
+              <div key={n} style={{
+                display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10,
+                alignItems: 'baseline', padding: '6px 14px', fontSize: 13,
+                background: isTotal ? col + '1f' : isSub ? '#0d1117' : 'transparent',
+                borderTop: isSub || isTotal ? `1px solid ${C.border}` : 'none',
+                fontWeight: isTotal || isSub ? 700 : 400,
+              }}>
+                <span style={{ color: isTotal ? col : C.text }}>{r.name}</span>
+                <span style={{
+                  fontSize: isTotal ? 16 : 14, fontWeight: 700,
+                  color: isTotal ? col : isSub || isHead ? C.text : r.display >= 0 ? C.green : C.red,
+                }}>
+                  {isTotal || isSub || isHead ? drillInt(r.display) : cfSigned(r.display)}
+                </span>
+                <span style={{ fontSize: 11, color: C.muted, minWidth: 60, textAlign: 'right' }}>
+                  {isTotal || isSub ? '' : drillInt(r.running)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      renderResult={(ledger, info, uniqMissed) => {
+        const t = (sec) => ledger.totals.find(x => x.sec === sec)?.value ?? 0;
+        const opTotal = t('op'), invTotal = t('inv'), finTotal = t('fin');
+        const netChange = opTotal + invTotal + finTotal;
+        return (
+          <>
+            <div style={{ textAlign: 'center', marginBottom: 18 }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>{uniqMissed.length === 0 ? '🎉' : '📝'}</div>
+              <div style={{ fontSize: 13, color: C.muted }}>
+                {info.mode === 'op' ? '営業活動によるキャッシュ・フロー' : '現金及び現金同等物の増加額'}
+              </div>
+              <div style={{
+                fontSize: 32, fontWeight: 700, marginTop: 2,
+                color: uniqMissed.length === 0 ? C.gold : C.accent,
+              }}>{drillInt(info.mode === 'op' ? opTotal : netChange)}</div>
+            </div>
+            {info.mode !== 'op' && (
+              <div style={{ background: '#0d1117', borderRadius: 10, padding: '12px 14px', fontSize: 13 }}>
+                {[['営業CF', opTotal, CF_SEC.op], ['投資CF', invTotal, CF_SEC.inv], ['財務CF', finTotal, CF_SEC.fin]].map(([label, v, col]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
+                    <span style={{ color: col, fontWeight: 700 }}>{label}</span>
+                    <span style={{ color: v >= 0 ? C.green : C.red, fontWeight: 700 }}>{cfSigned(v)}</span>
+                  </div>
+                ))}
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', padding: '8px 0 0',
+                  marginTop: 6, borderTop: `1px solid ${C.border}`,
+                }}>
+                  <span style={{ color: C.muted }}>期首残高 {drillInt(info.cse.opening)} → 期末残高</span>
+                  <span style={{ color: C.text, fontWeight: 700 }}>{drillInt(info.cse.opening + netChange)}</span>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      }}
+    />
+  );
+}
+
+function NpvDrill({ onFinish, onExit }) {
   const Y = NPV_YEARS;
-  const uniqMissed = [...new Set(missed)];
+  return (
+    <DrillRunner
+      onFinish={onFinish}
+      onExit={onExit}
+      meta={{
+        key: 'npv', icon: '💹', title: 'NPVドリル', accent: C.purple,
+        lead: '試験の答案と同じ順番で進めます。まず年度別のCF表を書き、同じ金額が続く区間を年金現価係数の引き算でまとめて割り引く。金額・割引率・税率は毎回変わります。',
+      }}
+      modes={[
+        { id: 'basic', icon: '📊', title: '基本',       desc: '取得支出・タックスシールド・支払利息の扱いから、年金現価係数の引き算まで。10項目18問。', xp: 90 },
+        { id: 'full',  icon: '🏭', title: '設備更新',   desc: '旧設備の売却・運転資本・埋没原価・機会原価・残存価値まで含めた設備更新投資。17項目30問。', xp: 150 },
+      ]}
+      build={(m) => {
+        const cse = buildNpvCase(m);
+        const built = buildNpvSteps(cse);
+        return {
+          steps: built.steps.map(s => ({
+            ...s,
+            accent: s.phase === 'table' ? C.accent : C.purple,
+            tag: s.phase === 'table' ? '①表を書く' : '②割り引く',
+          })),
+          info: { cse, mode: m, npv: built.npv },
+          ledger: { rows: [], blocks: [] },
+        };
+      }}
+      applyStep={(ledger, step) => {
+        let rows = ledger.rows;
+        if (step.row) {
+          const k = rows.findIndex(r => r.label === step.row.label);
+          if (k < 0) rows = [...rows, { ...step.row }];
+          else {
+            rows = [...rows];
+            rows[k] = { ...rows[k], cells: { ...rows[k].cells, ...step.row.cells } };
+          }
+        }
+        return { rows, blocks: step.block ? [...ledger.blocks, step.block] : ledger.blocks };
+      }}
+      headerNote={(info) => (<>単位：万円<br />割引率 {info.cse.rate}%・税率 {info.cse.tax}%</>)}
+      hint={(step) => step.phase === 'table'
+        ? '現金がいつ動くか、税引後でいくらかに戻って考えてみてください。'
+        : '同額が続く区間はどこまでか、その係数は表のどこから作れるかで考えてみてください。'}
+      nextLabel={(step) => step.phase === 'table' ? '表に書き込む' : '計算に反映する'}
+      renderLedger={(ledger, info) => <NpvLedger ledger={ledger} info={info} years={Y} />}
+      renderResult={(ledger, info, uniqMissed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{uniqMissed.length === 0 ? '🎉' : '📝'}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>正味現在価値（NPV）</div>
+          <div style={{
+            fontSize: 32, fontWeight: 700, marginTop: 2,
+            color: uniqMissed.length === 0 ? C.gold : C.purple,
+          }}>{drillSigned(info.npv)}</div>
+          <div style={{ fontSize: 13, color: info.npv > 0 ? C.green : C.red, fontWeight: 700, marginTop: 4 }}>
+            {info.npv > 0 ? '→ 投資すべき' : '→ 投資すべきでない'}
+          </div>
+        </div>
+      )}
+    />
+  );
+}
+
+function NpvLedger({ ledger, info, years: Y }) {
+  const rows = ledger.rows;
   const flowRows = rows.filter(r => r.group === 'flow');
   const onceRows = rows.filter(r => r.group === 'once');
   const outRows  = rows.filter(r => r.group === 'out');
@@ -5053,49 +5175,21 @@ function NpvDrill({ onFinish, onExit }) {
         const v = cells[y];
         return (
           <span key={y} style={{
-            ...cellBase,
-            fontWeight: opt.bold ? 700 : 400,
+            ...cellBase, fontWeight: opt.bold ? 700 : 400,
             color: v === undefined || v === null ? C.border
               : opt.bold ? C.text : v >= 0 ? C.green : C.red,
-          }}>{v === undefined || v === null ? '·' : npvSigned(v)}</span>
+          }}>{v === undefined || v === null ? '·' : drillSigned(v)}</span>
         );
       })}
     </div>
   );
 
+  const blockTotal = ledger.blocks.reduce((a, b) => a + b.cf * b.factor, 0);
+  const blockGoal = info.mode === 'basic' ? 3 : 4;
+
   return (
-    <div style={{ padding: '16px 16px 80px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-        <button onClick={() => setMode(null)} style={{
-          background: 'none', border: 'none', color: C.purple, cursor: 'pointer',
-          fontSize: 22, padding: 0 }}>←</button>
-        <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: C.text }}>
-          {mode === 'basic' ? 'NPVドリル（基本）' : 'NPVドリル（設備更新）'}
-        </div>
-        <div style={{ fontSize: 11, color: C.muted, textAlign: 'right', lineHeight: 1.4 }}>
-          単位：万円<br />割引率 {cse.rate}%・税率 {cse.tax}%
-        </div>
-      </div>
-
-      {/* 進捗 */}
-      <div style={{ display: 'flex', gap: 3, marginBottom: 14 }}>
-        {steps.map((_, k) => (
-          <div key={k} style={{
-            flex: 1, height: 3, borderRadius: 2,
-            background: k < i || done ? C.green : k === i ? C.gold : C.border,
-          }} />
-        ))}
-      </div>
-
-      {/* ① 年度別CF表 */}
-      <div style={{
-        background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-        marginBottom: 12, overflow: 'hidden',
-      }}>
-        <div style={{
-          padding: '9px 12px 8px', fontSize: 12, fontWeight: 700, color: C.accent,
-          borderBottom: `1px solid ${C.border}`,
-        }}>① 年度別キャッシュフロー表</div>
+    <>
+      <DrillCard title="① 年度別キャッシュフロー表" color={C.accent}>
         <div style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 324, padding: '4px 0' }}>
             <div style={{
@@ -5107,25 +5201,22 @@ function NpvDrill({ onFinish, onExit }) {
                 <span key={y} style={{ ...cellBase, color: C.muted, fontWeight: 700 }}>t={y}</span>
               ))}
             </div>
-
             {rows.length === 0 && (
               <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px', lineHeight: 1.6 }}>
                 判断した項目から順に、ここへ書き込まれます。
               </div>
             )}
-
             {flowRows.length > 0 && (
               <>
                 <div style={{ ...labelBase, fontSize: 10, color: C.accent, fontWeight: 700, paddingTop: 6 }}>
                   {NPV_GROUP_LABEL.flow}
                 </div>
                 {flowRows.map(r => matrixRow(r.label, r.cells))}
-                {flowRows.length > 0 && matrixRow('定常CF計',
+                {matrixRow('定常CF計',
                   Object.fromEntries(colSum.map((v, y) => [y, y === 0 ? null : v])),
                   { top: true, bold: true, bg: '#0d1117', tag: 'sum' })}
               </>
             )}
-
             {onceRows.length > 0 && (
               <>
                 <div style={{ ...labelBase, fontSize: 10, color: C.purple, fontWeight: 700, paddingTop: 8 }}>
@@ -5136,7 +5227,6 @@ function NpvDrill({ onFinish, onExit }) {
             )}
           </div>
         </div>
-
         {outRows.length > 0 && (
           <div style={{ borderTop: `1px solid ${C.border}`, padding: '7px 12px 9px' }}>
             <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, marginBottom: 3 }}>
@@ -5149,31 +5239,23 @@ function NpvDrill({ onFinish, onExit }) {
             ))}
           </div>
         )}
-      </div>
+      </DrillCard>
 
-      {/* ② 割引ブロック表 */}
-      {blocks.length > 0 && (
-        <div style={{
-          background: C.card, border: `1px solid ${C.border}`, borderRadius: 14,
-          marginBottom: 16, overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: '9px 12px 8px', fontSize: 12, fontWeight: 700, color: C.purple,
-            borderBottom: `1px solid ${C.border}`,
-          }}>② まとめて割り引く</div>
+      {ledger.blocks.length > 0 && (
+        <DrillCard title="② まとめて割り引く" color={C.purple} style={{ marginBottom: 16 }}>
           <div style={{ padding: '4px 0' }}>
-            {blocks.map((b, k) => (
+            {ledger.blocks.map((b, k) => (
               <div key={k} style={{ padding: '6px 12px' }}>
                 <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{b.label}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontSize: 12, color: C.text }}>
-                    {npvSigned(b.cf)} × {b.factorLabel}
+                    {drillSigned(b.cf)} × {b.factorLabel}
                     <span style={{ color: C.muted, fontSize: 10 }}>　{b.sub}</span>
                   </span>
                   <span style={{
                     fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
                     color: b.cf * b.factor >= 0 ? C.green : C.red,
-                  }}>{npvSigned(b.cf * b.factor)}</span>
+                  }}>{drillSigned(b.cf * b.factor)}</span>
                 </div>
               </div>
             ))}
@@ -5182,144 +5264,2396 @@ function NpvDrill({ onFinish, onExit }) {
               marginTop: 4, borderTop: `1px solid ${C.border}`, background: C.purple + '1a',
             }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>
-                NPV{blocks.length < (mode === 'basic' ? 3 : 4) ? '（途中）' : ''}
+                NPV{ledger.blocks.length < blockGoal ? '（途中）' : ''}
               </span>
               <span style={{
                 fontSize: 16, fontWeight: 700,
-                color: blocks.reduce((a, b) => a + b.cf * b.factor, 0) >= 0 ? C.green : C.red,
-              }}>{npvSigned(blocks.reduce((a, b) => a + b.cf * b.factor, 0))}</span>
+                color: blockTotal >= 0 ? C.green : C.red,
+              }}>{drillSigned(blockTotal)}</span>
             </div>
           </div>
-        </div>
+        </DrillCard>
       )}
+    </>
+  );
+}
 
-      {/* 結果 */}
-      {done ? (
-        <div style={{
-          background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: '24px 18px',
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>{uniqMissed.length === 0 ? '🎉' : '📝'}</div>
-            <div style={{ fontSize: 13, color: C.muted }}>正味現在価値（NPV）</div>
-            <div style={{
-              fontSize: 32, fontWeight: 700, marginTop: 2,
-              color: uniqMissed.length === 0 ? C.gold : C.purple,
-            }}>{npvSigned(npv)}</div>
-            <div style={{ fontSize: 13, color: npv > 0 ? C.green : C.red, fontWeight: 700, marginTop: 4 }}>
-              {npv > 0 ? '→ 投資すべき' : '→ 投資すべきでない'}
-            </div>
-          </div>
+// ============================================================
+// 経営分析ドリル（第1問の型：指標を選ぶ → 計算 → 優劣を判断）
+// ============================================================
 
-          <div style={{
-            background: '#0d1117', borderRadius: 10, padding: '12px 14px',
-            marginBottom: 18, fontSize: 13, color: C.text, lineHeight: 1.7,
-          }}>
-            {uniqMissed.length === 0
-              ? '全項目ノーミス。次は割引率と税率を変えて、表を書く順番が手に入っているか試してください。'
-              : (<>つまずいた項目
-                  <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: C.muted }}>
-                    {uniqMissed.map(m => <li key={m} style={{ margin: '3px 0' }}>{m}</li>)}
-                  </ul>
-                </>)}
-          </div>
+const ANA_AXES = [
+  { id: 'prof', label: '収益性', color: C.orange, lead: 'もうける力' },
+  { id: 'eff',  label: '効率性', color: C.accent, lead: '資産を使いこなす力' },
+  { id: 'safe', label: '安全性', color: C.green,  lead: 'つぶれにくさ' },
+];
 
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={again} style={{
-              flex: 1, padding: '13px', borderRadius: 10, border: `1px solid ${C.purple}`,
-              background: 'transparent', color: C.purple, fontWeight: 700, cursor: 'pointer', fontSize: 14,
-            }}>別の数字でもう一度</button>
-            <button onClick={() => setMode(null)} style={{
-              flex: 1, padding: '13px', borderRadius: 10, border: 'none',
-              background: C.purple, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14,
-            }}>ドリル一覧へ</button>
-          </div>
-        </div>
-      ) : step && q ? (
-        <div style={{
-          background: C.card, border: `1px solid ${C.border}`,
-          borderLeft: `3px solid ${step.phase === 'table' ? C.accent : C.purple}`,
-          borderRadius: 14, padding: '16px 15px',
-        }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
-            paddingBottom: 12, marginBottom: 14, borderBottom: `1px dashed ${C.border}`,
-          }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1.4 }}>
-              <span style={{
-                fontSize: 10, fontWeight: 700, marginRight: 7, padding: '2px 6px', borderRadius: 5,
-                background: (step.phase === 'table' ? C.accent : C.purple) + '26',
-                color: step.phase === 'table' ? C.accent : C.purple,
-              }}>{step.phase === 'table' ? '①表を書く' : '②割り引く'}</span>
-              {step.name}
-            </span>
-            {step.amt !== undefined && (
-              <span style={{ fontSize: 16, fontWeight: 700, color: C.gold, whiteSpace: 'nowrap' }}>
-                {step.amt.toLocaleString()}
-              </span>
-            )}
-          </div>
+const ANA_METRICS = {
+  grossRate: { axis: 'prof', name: '売上高総利益率',   unit: '%', digits: 2, f: x => x.gross / x.sales * 100,
+    formula: '売上総利益 ÷ 売上高', why: '原価率の高さ＝仕入・製造段階の問題を映す' },
+  opRate:    { axis: 'prof', name: '売上高営業利益率', unit: '%', digits: 2, f: x => x.op / x.sales * 100,
+    formula: '営業利益 ÷ 売上高', why: '本業のもうけ。販管費の重さまで含めて映す' },
+  ordRate:   { axis: 'prof', name: '売上高経常利益率', unit: '%', digits: 2, f: x => x.ord / x.sales * 100,
+    formula: '経常利益 ÷ 売上高', why: '支払利息などの財務負担まで含めた最終的な収益力' },
+  tanTurn:   { axis: 'eff',  name: '有形固定資産回転率', unit: '回', digits: 2, f: x => x.sales / x.tangible,
+    formula: '売上高 ÷ 有形固定資産', why: '設備が売上を生んでいるか。遊休設備があると下がる' },
+  invTurn:   { axis: 'eff',  name: '棚卸資産回転率',   unit: '回', digits: 2, f: x => x.sales / x.inventory,
+    formula: '売上高 ÷ 棚卸資産', why: '在庫が滞留していないか。過剰在庫で下がる' },
+  recTurn:   { axis: 'eff',  name: '売上債権回転率',   unit: '回', digits: 2, f: x => x.sales / x.receivable,
+    formula: '売上高 ÷ 売上債権', why: '回収の速さ。回収条件が悪いと下がる' },
+  equityR:   { axis: 'safe', name: '自己資本比率',     unit: '%', digits: 2, f: x => x.equity / x.assets * 100,
+    formula: '自己資本 ÷ 総資本', why: '借入依存度。長期的な安全性の代表指標' },
+  currentR:  { axis: 'safe', name: '流動比率',         unit: '%', digits: 2, f: x => x.ca / x.cl * 100,
+    formula: '流動資産 ÷ 流動負債', why: '1年以内の支払能力。短期の資金繰り' },
+  quickR:    { axis: 'safe', name: '当座比率',         unit: '%', digits: 2, f: x => (x.ca - x.inventory) / x.cl * 100,
+    formula: '当座資産 ÷ 流動負債', why: '在庫を除いた、より厳しい短期支払能力' },
+};
 
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>{q.step}</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 14, lineHeight: 1.6 }}>{q.q}</div>
+const ANA_AXIS_METRICS = {
+  prof: ['grossRate', 'opRate', 'ordRate'],
+  eff:  ['tanTurn', 'invTurn', 'recTurn'],
+  safe: ['equityR', 'currentR', 'quickR'],
+};
 
-          {q.opts.map((o, k) => {
-            const wrong = picked.includes(k) && !o.ok;
-            const right = (phase === 'right' && picked.includes(k) && o.ok) || (phase === 'reveal' && o.ok);
+// 原因の候補（選んだ指標から記述の方向づけへつなぐ）
+const ANA_CAUSE = {
+  grossRate: { ok: '原材料費の高騰や歩留まりの悪化で、売上原価が重くなっている',
+    ng: ['本社の間接人員が多く販管費が膨らんでいる', '借入金が多く支払利息が利益を圧迫している', '遊休設備を抱えている'] },
+  opRate:    { ok: '販売費及び一般管理費が重く、粗利を食いつぶしている',
+    ng: ['支払利息の負担が重い', '在庫が滞留している', '売上債権の回収が遅い'] },
+  ordRate:   { ok: '借入金への依存が高く、支払利息が利益を圧迫している',
+    ng: ['原材料費が高騰している', '販管費が膨らんでいる', '設備が遊休化している'] },
+  tanTurn:   { ok: '設備投資に見合う売上が上がらず、遊休設備を抱えている',
+    ng: ['在庫が滞留している', '売上債権の回収が遅い', '原材料費が高騰している'] },
+  invTurn:   { ok: '見込生産による過剰在庫と、滞留在庫が発生している',
+    ng: ['遊休設備を抱えている', '売上債権の回収が遅い', '販管費が膨らんでいる'] },
+  recTurn:   { ok: '特定取引先への依存から回収条件が不利で、売上債権が滞留している',
+    ng: ['過剰在庫を抱えている', '遊休設備がある', '支払利息の負担が重い'] },
+  equityR:   { ok: '設備投資を借入で賄っており、自己資本の蓄積が追いついていない',
+    ng: ['在庫が滞留している', '販管費が膨らんでいる', '遊休設備がある'] },
+  currentR:  { ok: '短期借入金が多く、1年以内に返済すべき負債が重い',
+    ng: ['自己資本の蓄積が乏しい', '原材料費が高騰している', '遊休設備がある'] },
+  quickR:    { ok: '在庫を除くと手元資金が薄く、短期の支払余力に乏しい',
+    ng: ['設備が遊休化している', '支払利息の負担が重い', '販管費が膨らんでいる'] },
+};
+
+function buildAnaCase() {
+  // 同業他社は「指標の目標値」から逆算して作る。軸ごとに1つだけ差が大きく開く
+  // 指標を決め、残り2指標は同じ向きに小さく差をつける。
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const sales = drillRnd(9000, 20000, 100);
+    const d = { sales };
+    // 利益率は実務的な帯に収める（粗利24〜40%、営業利益率3〜12%）。
+    // 販管費を先にランダムに引くと営業利益率が1%台まで落ちて現実味を欠くため、
+    // 営業利益率のほうを先に決めて逆算する。
+    const grossRate = drillRnd(24, 40, 1);
+    const opRate    = drillRnd(3, Math.min(12, Math.max(4, grossRate - 12)), 1);
+    d.gross      = Math.round(sales * grossRate / 100);
+    d.op         = Math.round(sales * opRate / 100);
+    d.interest   = Math.round(d.op * drillRnd(10, 45, 5) / 100 / 10) * 10;
+    d.ord        = d.op - d.interest;
+    d.tangible   = drillRnd(2500, 9000, 100);
+    d.inventory  = drillRnd(600, 3000, 100);
+    d.receivable = drillRnd(900, 3500, 100);
+    d.cash       = drillRnd(500, 2200, 100);
+    d.ca         = d.inventory + d.receivable + d.cash;
+    d.other      = drillRnd(300, 1200, 100);
+    d.assets     = d.ca + d.tangible + d.other;
+    d.cl         = drillRnd(1500, 4500, 100);
+    d.equity     = Math.round(d.assets * drillRnd(20, 50, 1) / 100);
+    if (d.op <= 0 || d.ord <= 0) continue;
+
+    const strong = drillPick(['prof', 'eff', 'safe']);
+    // 軸ごとに「差が大きく開く指標」を1つ選ぶ
+    const target = {};
+    for (const ax of ANA_AXES) target[ax.id] = drillPick(ANA_AXIS_METRICS[ax.id]);
+    // D社が優れる軸なら同業他社を下げる（f<1）、劣る軸なら上げる（f>1）
+    const f = (axis, key) => {
+      const delta = (target[axis] === key ? drillRnd(20, 34, 1) : drillRnd(3, 8, 1)) / 100;
+      return axis === strong ? 1 - delta : 1 + delta;
+    };
+
+    const p = { sales, other: d.other };
+    // 収益性：利益率をそのまま倍率で動かす
+    p.gross = Math.round(d.gross * f('prof', 'grossRate'));
+    p.op    = Math.round(d.op    * f('prof', 'opRate'));
+    p.ord   = Math.round(d.ord   * f('prof', 'ordRate'));
+    p.interest = p.op - p.ord;
+    if (p.op <= 0 || p.ord <= 0 || p.interest <= 10 || p.op >= p.gross) continue;
+
+    // 効率性：回転率＝売上高÷資産。回転率をf倍にするには分母を1/f倍にする
+    p.tangible   = Math.round(d.tangible   / f('eff', 'tanTurn'));
+    p.inventory  = Math.round(d.inventory  / f('eff', 'invTurn'));
+    p.receivable = Math.round(d.receivable / f('eff', 'recTurn'));
+
+    // 安全性：流動比率・当座比率・自己資本比率の目標値から流動資産と流動負債を逆算
+    const crD = d.ca / d.cl;
+    const qrD = (d.ca - d.inventory) / d.cl;
+    const fc = f('safe', 'currentR'), fq = f('safe', 'quickR'), fe = f('safe', 'equityR');
+    const ratioP = (qrD / crD) * (fq / fc);              // ＝ 1 − 棚卸資産÷流動資産
+    if (ratioP <= 0.08 || ratioP >= 0.92) continue;
+    p.ca = p.inventory / (1 - ratioP);
+    p.cash = Math.round(p.ca - p.inventory - p.receivable);
+    if (p.cash < 150) continue;
+    p.ca = p.inventory + p.receivable + p.cash;
+    p.cl = Math.round(p.ca / (crD * fc));
+    if (p.cl < 300) continue;
+    p.assets = p.ca + p.tangible + p.other;
+    const eqRateP = (d.equity / d.assets) * fe;
+    if (eqRateP <= 0.08 || eqRateP >= 0.85) continue;
+    p.equity = Math.round(p.assets * eqRateP);
+
+    // 逆算の丸め誤差で崩れていないか、実際の指標値で検証する
+    const picks = {};
+    let ok = true;
+    for (const ax of ANA_AXES) {
+      const rows = ANA_AXIS_METRICS[ax.id].map(k => {
+        const m = ANA_METRICS[k];
+        const dv = m.f(d), pv = m.f(p);
+        return { k, dv, pv, gap: Math.abs(dv - pv) / Math.abs(pv) };
+      });
+      const dirs = rows.map(r => r.dv > r.pv);
+      if (new Set(dirs).size !== 1) { ok = false; break; }          // 軸内で優劣の向きが揃う
+      if (dirs[0] !== (ax.id === strong)) { ok = false; break; }     // 意図した向きか
+      const sorted = [...rows].sort((x, y) => y.gap - x.gap);
+      if (sorted[0].k !== target[ax.id]) { ok = false; break; }      // 狙った指標の差が最大か
+      if (!(sorted[0].gap > sorted[1].gap * 1.6 && sorted[0].gap > 0.12)) { ok = false; break; }
+      picks[ax.id] = sorted[0];
+    }
+    if (!ok) continue;
+    return { d, p, picks, strong };
+  }
+  return null;
+}
+
+function buildAnaSteps(c) {
+  const s = drillSteps();
+  const { d, p, picks, strong } = c;
+  const fmt = (k, x) => drillNum(ANA_METRICS[k].f(x), ANA_METRICS[k].digits) + ANA_METRICS[k].unit;
+
+  s.push({
+    name: '分析の枠組み', tag: '準備', accent: C.muted,
+    qs: [{ step: '3つの軸', q: '第1問で財務諸表を見るとき、必ず押さえる3つの軸は。',
+      opts: [
+        { t: '収益性・効率性・安全性', ok: true },
+        { t: '収益性・成長性・生産性' },
+        { t: '流動性・健全性・将来性' },
+        { t: '売上高・利益・キャッシュフロー' }],
+      why: 'もうける力（収益性）・資産を使いこなす力（効率性）・つぶれにくさ（安全性）。3軸から1つずつ拾うのが解答の型で、同じ軸から2つ挙げると得点が伸びない。' }],
+  });
+
+  for (const ax of ANA_AXES) {
+    const win = picks[ax.id];
+    const m = ANA_METRICS[win.k];
+    const better = win.dv > win.pv;
+    const cands = ANA_AXIS_METRICS[ax.id];
+    const cause = ANA_CAUSE[win.k];
+
+    s.push({
+      name: ax.label + 'の指標を選ぶ', tag: ax.label, accent: ax.color,
+      qs: [
+        { step: '1／3　指標の選択',
+          q: ax.label + '（' + ax.lead + '）を見る。同業他社との差が最もはっきり出ていて、'
+             + (better ? '強み' : '課題') + 'を的確に表す指標はどれか。',
+          opts: cands.map(k => ({
+            t: ANA_METRICS[k].name + '　（' + ANA_METRICS[k].formula + '）',
+            ok: k === win.k,
+          })),
+          why: cands.map(k => ANA_METRICS[k].name + ' ' + fmt(k, d) + '（他社 ' + fmt(k, p) + '）').join('／')
+            + '。' + m.name + 'の差がいちばん大きい。3つとも同じ向きに差が出ているときは、差の大きいものを挙げるのが定石。' },
+        { step: '2／3　優劣の判断',
+          q: m.name + ' は D社 ' + fmt(win.k, d) + '、同業他社 ' + fmt(win.k, p) + '。どう書くか。',
+          opts: [
+            { t: '同業他社を上回っており、優れている点として挙げる', ok: better },
+            { t: '同業他社を下回っており、課題として挙げる', ok: !better },
+            { t: '差が小さいので、この指標は挙げない' },
+            { t: '数値が大きいほうが悪いので、判断を逆にする' }],
+          why: m.name + 'は' + m.why + '。' + (better
+            ? '高いほど良い指標で他社を上回っているので、これは強み。'
+            : '高いほど良い指標で他社を下回っているので、これは課題。')
+            + '（' + (ax.id === strong ? 'この設問ではD社が優位な軸' : 'この設問ではD社が劣位な軸') + '）' },
+        { step: '3／3　原因の見立て',
+          q: 'この' + (better ? '強み' : '課題') + 'の背景として、与件文で探すべき記述はどれか。',
+          opts: [{ t: cause.ok, ok: true }, ...cause.ng.map(t => ({ t }))],
+          why: '指標は「どこを見るか」を教えてくれるだけ。原因は必ず与件文に書いてある。'
+            + m.name + 'なら「' + m.formula + '」の分母と分子のどちらが動いたのかを考えると、探す記述が絞れる。' }],
+    });
+  }
+
+  const weak = ANA_AXES.filter(a => a.id !== strong);
+  s.push({
+    name: '解答の組み立て', tag: 'まとめ', accent: C.gold,
+    qs: [
+      { step: '1／2　構成',
+        q: '3つの指標が出そろった。第1問の解答としてどう配分するか。',
+        opts: [
+          { t: '優れている点を1つ、課題を2つ挙げる', ok: true },
+          { t: '課題を3つ挙げる' },
+          { t: '優れている点を3つ挙げる' },
+          { t: '最も差の大きい指標1つだけを深く書く' }],
+        why: '「優れている点1つ・課題2つ」が定番の問われ方。今回は'
+          + ANA_AXES.find(a => a.id === strong).label + 'が強み、'
+          + weak.map(a => a.label).join('と') + 'が課題という構成になる。' },
+      { step: '2／2　書き方',
+        q: '指標を挙げるとき、解答に必ず添えるものは。',
+        opts: [
+          { t: '指標名と数値（単位つき）', ok: true },
+          { t: '指標名だけ。数値は計算欄に書けばよい' },
+          { t: '数値だけ。指標名は自明なので省く' },
+          { t: '計算過程の式' }],
+        why: '指標名と数値はセットで配点がある。単位（%・回）の付け忘れと、小数点以下の桁数指定の読み落としが失点の定番。' }],
+  });
+
+  return { steps: s, info: c };
+}
+
+function AnalysisDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish} onExit={onExit}
+      meta={{
+        key: 'analysis', icon: '📉', title: '経営分析ドリル', accent: C.orange,
+        lead: '事例IV第1問の型。財務諸表を見て、3軸それぞれで「差がはっきり出ていて、強み／課題を的確に表す指標」を選び、優劣を判断して、原因の見立てまでつなげます。数値は毎回変わります。',
+      }}
+      modes={[{ id: 'pick', icon: '🔍', title: '指標選択', desc: '収益性・効率性・安全性から1つずつ指標を選び、優劣と原因まで。5項目12問。', xp: 90 }]}
+      build={() => {
+        const c = buildAnaCase();
+        return { ...buildAnaSteps(c), ledger: { picked: [] } };
+      }}
+      applyStep={(ledger, step, info) => {
+        const ax = ANA_AXES.find(a => a.label === step.tag);
+        if (!ax) return ledger;
+        const win = info.picks[ax.id];
+        return { picked: [...ledger.picked, { axis: ax, key: win.k, dv: win.dv, pv: win.pv }] };
+      }}
+      headerNote={() => '単位：百万円'}
+      hint={() => '同業他社との差がどの指標でいちばん大きいか、その指標は高いほど良いのかで考えてみてください。'}
+      nextLabel={() => '指標表に記入する'}
+      renderLedger={(ledger, info) => <AnaLedger ledger={ledger} info={info} />}
+      renderResult={(ledger, info, missed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>選んだ3指標</div>
+          {ledger.picked.map(pk => {
+            const m = ANA_METRICS[pk.key];
+            const better = pk.dv > pk.pv;
             return (
-              <button key={k} onClick={() => choose(k)} disabled={phase !== 'ask' || wrong}
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left',
-                  padding: '12px 13px', marginBottom: 8, borderRadius: 10,
-                  border: `1px solid ${right ? C.green : wrong ? C.red : C.border}`,
-                  background: right ? C.green + '1f' : wrong ? C.red + '18' : '#0d1117',
-                  color: C.text, fontSize: 14, lineHeight: 1.55,
-                  cursor: phase === 'ask' && !wrong ? 'pointer' : 'default',
-                  fontFamily: 'inherit',
-                }}>{o.t}</button>
+              <div key={pk.key} style={{ fontSize: 14, color: C.text, margin: '4px 0' }}>
+                <span style={{ color: pk.axis.color, fontWeight: 700 }}>{pk.axis.label}</span>
+                {' '}{m.name} {drillNum(pk.dv, m.digits)}{m.unit}
+                <span style={{ color: better ? C.green : C.red, fontWeight: 700, marginLeft: 6 }}>
+                  {better ? '強み' : '課題'}
+                </span>
+              </div>
             );
           })}
+        </div>
+      )}
+    />
+  );
+}
 
-          {phase === 'ask' && picked.length > 0 && (
-            <div style={{
-              marginTop: 12, padding: '12px 13px', borderRadius: 10,
-              background: C.red + '14', border: `1px solid ${C.red}44`, fontSize: 13, color: C.text, lineHeight: 1.7,
-            }}>
-              ちがいます。{step.phase === 'table'
-                ? '現金がいつ動くか、税引後でいくらかに戻って考えてみてください。'
-                : '同額が続く区間はどこまでか、その係数は表のどこから作れるかで考えてみてください。'}
+function AnaLedger({ ledger, info }) {
+  const { d, p } = info;
+  const line = (label, dv, pv) => (
+    <div key={label} style={{
+      display: 'grid', gridTemplateColumns: '1fr 68px 68px', gap: 6,
+      padding: '4px 12px', fontSize: 11,
+    }}>
+      <span style={{ color: C.text }}>{label}</span>
+      <span style={{ textAlign: 'right', color: C.text }}>{drillInt(dv)}</span>
+      <span style={{ textAlign: 'right', color: C.muted }}>{drillInt(pv)}</span>
+    </div>
+  );
+  return (
+    <>
+      <DrillCard title="財務諸表（抜粋）" color={C.muted}>
+        <div style={{ padding: '4px 0' }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 68px 68px', gap: 6,
+            padding: '4px 12px 6px', fontSize: 10, color: C.muted, fontWeight: 700,
+            borderBottom: `1px solid ${C.border}`,
+          }}>
+            <span>科目</span><span style={{ textAlign: 'right' }}>D社</span><span style={{ textAlign: 'right' }}>同業他社</span>
+          </div>
+          {line('売上高', d.sales, p.sales)}
+          {line('売上総利益', d.gross, p.gross)}
+          {line('営業利益', d.op, p.op)}
+          {line('経常利益', d.ord, p.ord)}
+          {line('（うち支払利息）', d.interest, p.interest)}
+          <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4, paddingTop: 4 }}>
+            {line('売上債権', d.receivable, p.receivable)}
+            {line('棚卸資産', d.inventory, p.inventory)}
+            {line('流動資産', d.ca, p.ca)}
+            {line('有形固定資産', d.tangible, p.tangible)}
+            {line('総資産', d.assets, p.assets)}
+            {line('流動負債', d.cl, p.cl)}
+            {line('自己資本', d.equity, p.equity)}
+          </div>
+        </div>
+      </DrillCard>
+
+      <DrillCard title="選んだ指標" color={C.orange} style={{ marginBottom: 16 }}>
+        <div style={{ padding: '4px 0' }}>
+          {ledger.picked.length === 0 && (
+            <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px' }}>
+              軸ごとに指標を選ぶと、ここへ並びます。
             </div>
           )}
+          {ledger.picked.map(pk => {
+            const m = ANA_METRICS[pk.key];
+            const better = pk.dv > pk.pv;
+            return (
+              <DrillRow key={pk.key}
+                label={<><span style={{ color: pk.axis.color, fontWeight: 700, fontSize: 10 }}>{pk.axis.label}</span>{' '}{m.name}</>}
+                note={'他社 ' + drillNum(pk.pv, m.digits) + m.unit}
+                value={drillNum(pk.dv, m.digits) + m.unit + (better ? ' ◎' : ' ▲')}
+                valueColor={better ? C.green : C.red}
+              />
+            );
+          })}
+        </div>
+      </DrillCard>
+    </>
+  );
+}
 
-          {(phase === 'right' || phase === 'reveal') && (
+// ============================================================
+// CVPドリル（固変分解 → 変動損益計算書 → BEP／セールスミックス）
+// ============================================================
+
+function buildCvpCase(mode) {
+  const c = {
+    mode,
+    price: drillRnd(20, 45, 1),      // 単価（千円／個）
+    qty:   drillRnd(400, 900, 10),
+    qHigh: drillRnd(700, 950, 10),
+    qLow:  drillRnd(200, 400, 10),
+  };
+  c.vcost = drillRnd(8, Math.max(9, Math.floor(c.price * 0.7)), 1);
+  c.mcU   = c.price - c.vcost;                 // 単位あたり限界利益
+  // 固定費は限界利益の45〜80%に収め、営業利益が黒字・安全余裕率が20〜55%になるようにする
+  c.fixed = Math.round(c.mcU * c.qty * drillRnd(45, 80, 1) / 100 / 10) * 10;
+  c.costHigh = c.vcost * c.qHigh + c.fixed;
+  c.costLow  = c.vcost * c.qLow  + c.fixed;
+  c.sales = c.price * c.qty;
+  c.vc    = c.vcost * c.qty;
+  c.mc    = c.mcU * c.qty;
+  c.op    = c.mc - c.fixed;
+  c.mcRate  = c.mcU / c.price;
+  c.bepQty  = c.fixed / c.mcU;
+  c.bepSales = c.bepQty * c.price;
+  c.bepRate = c.bepSales / c.sales * 100;
+  c.safety  = 100 - c.bepRate;
+  c.leverage = c.mc / c.op;
+
+  if (mode === 'mix') {
+    const names = ['製品A', '製品B', '製品C'];
+    c.items = names.map(n => {
+      const price = drillRnd(24, 60, 2);
+      const vcost = drillRnd(10, Math.max(11, Math.floor(price * 0.65)), 1);
+      const hours = drillRnd(2, 6, 1) / 2;      // 1個あたり機械時間
+      return { name: n, price, vcost, hours, demand: drillRnd(200, 500, 20), mcU: price - vcost };
+    });
+    c.items.forEach(it => { it.mcPerH = it.mcU / it.hours; });
+    c.ranked = [...c.items].sort((a, b) => b.mcPerH - a.mcPerH);
+    // 制約あたり限界利益の順位が単位限界利益の順位と食い違うケースだけ採用
+    const byUnit = [...c.items].sort((a, b) => b.mcU - a.mcU);
+    c.trap = byUnit[0].name !== c.ranked[0].name;
+    // 上位2製品は需要上限まで作れ、第3順位が時間切れになる総枠にする。
+    // 端数の遊び時間を残さないことで、順位どおりに埋める解が厳密な最適解になる。
+    const r3 = c.ranked[2];
+    const make3 = drillRnd(
+      Math.max(20, Math.round(r3.demand * 0.25 / 10) * 10),
+      Math.max(30, Math.round(r3.demand * 0.7 / 10) * 10), 10);
+    c.limit = c.ranked[0].demand * c.ranked[0].hours
+            + c.ranked[1].demand * c.ranked[1].hours
+            + make3 * r3.hours;
+    let rest = c.limit;
+    c.plan = c.ranked.map(it => {
+      const canMake = Math.min(it.demand, Math.floor(rest / it.hours));
+      rest -= canMake * it.hours;
+      return { ...it, make: canMake, hoursUsed: canMake * it.hours, mc: canMake * it.mcU };
+    });
+    c.restHours = rest;
+    c.mixMc = c.plan.reduce((a, x) => a + x.mc, 0);
+    c.mixFixed = drillRnd(4000, 9000, 100);
+    c.mixOp = c.mixMc - c.mixFixed;
+  }
+  return c;
+}
+
+function buildCvpBasicSteps(c) {
+  const s = drillSteps();
+  const n = drillInt;
+  const A = C.accent, P = C.purple, G = C.gold;
+
+  s.push({
+    name: '高低点法で分ける', tag: '①固変分解', accent: A,
+    qs: [
+      { step: '1／3　使うデータ',
+        q: '月次の生産量と総製造原価のデータがある。高低点法で使うのはどの2点か。',
+        opts: [
+          { t: '生産量が最大の月と最小の月', ok: true },
+          { t: '総原価が最大の月と最小の月' },
+          { t: '最初の月と最後の月' },
+          { t: '平均に最も近い2つの月' }],
+        why: '基準は「操業度（生産量）」の最大・最小。総原価で選ぶと、異常値のある月を拾ってしまう。正常操業圏から外れた月は除外するのも約束ごと。' },
+      { step: '2／3　変動費率',
+        q: '最高 ' + n(c.qHigh) + '個で総原価 ' + n(c.costHigh) + '、最低 ' + n(c.qLow) + '個で総原価 ' + n(c.costLow) + '。単位あたり変動費を求める式は。',
+        opts: [
+          { t: '（総原価の差）÷（生産量の差）', ok: true },
+          { t: '（総原価の差）÷（生産量の合計）' },
+          { t: '（総原価の合計）÷（生産量の合計）' },
+          { t: '最高点の総原価 ÷ 最高点の生産量' }],
+        why: '2点を結ぶ直線の傾きが変動費率。(' + n(c.costHigh) + '−' + n(c.costLow) + ') ÷ (' + n(c.qHigh) + '−' + n(c.qLow) + ') ＝ ' + n(c.vcost) + '。最後の選択肢は平均原価であって変動費率ではない。' },
+      { step: '3／3　固定費',
+        q: '単位変動費 ' + n(c.vcost) + ' が出た。固定費はどう求めるか。',
+        opts: [
+          { t: 'どちらかの点の総原価 − 単位変動費 × その点の生産量', ok: true },
+          { t: '最高点と最低点の総原価の平均' },
+          { t: '総原価 − 変動費率（比率をそのまま引く）' },
+          { t: '最低点の総原価をそのまま固定費とみなす' }],
+        why: n(c.costHigh) + ' − ' + n(c.vcost) + '×' + n(c.qHigh) + ' ＝ ' + n(c.fixed) + '。最低点で計算しても同じ ' + n(c.fixed) + ' になる。一致しなければどこかで計算ミス、という検算にも使える。' }],
+  });
+
+  s.push({
+    name: '売上高', tag: '②損益計算書', accent: A, amt: c.sales,
+    row: { key: 'sales', label: '売上高', value: c.sales, kind: 'head' },
+    qs: [
+      { step: '記入', q: '単価 ' + n(c.price) + '、当月販売量 ' + n(c.qty) + '個。変動損益計算書の一番上に書くのは。',
+        opts: [
+          { t: '売上高 ' + n(c.sales) + '（単価 × 販売量）', ok: true },
+          { t: '限界利益 ' + n(c.mc) + ' から書き始める' },
+          { t: '総原価 ' + n(c.vcost * c.qty + c.fixed) + ' から書き始める' }],
+        why: '変動損益計算書は 売上高 → 変動費 → 限界利益 → 固定費 → 営業利益 の順。上から順に埋めるのが最短で、途中の限界利益率がそのままBEPの計算に使える。' }],
+  });
+
+  s.push({
+    name: '変動費', tag: '②損益計算書', accent: A, amt: c.vc,
+    row: { key: 'vc', label: '変動費', value: -c.vc },
+    qs: [
+      { step: '1／2　位置', q: '変動費 ' + n(c.vc) + '（' + n(c.vcost) + ' × ' + n(c.qty) + '個）は、どこで引くか。',
+        opts: [
+          { t: '売上高から引いて限界利益を出す', ok: true },
+          { t: '限界利益から引いて営業利益を出す' },
+          { t: '固定費と合算してから売上高から引く' }],
+        why: '変動費は限界利益の上、固定費は下。ここを取り違えると限界利益率が狂い、BEP売上高が丸ごとずれる。' },
+      { step: '2／2　中身', q: '外注加工費は変動費・固定費のどちらに入れるか。',
+        opts: [
+          { t: '変動費（作った分だけ支払うから）', ok: true },
+          { t: '固定費（製造にかかる費用だから）' },
+          { t: '半分ずつ按分する' }],
+        why: '社内でやれば固定費（人件費・設備）になる工程も、外に出した瞬間に変動費に変わる。科目名で反射せず「生産量に比例して増えるか」で判断する。' }],
+  });
+
+  s.push({
+    name: '限界利益', tag: '②損益計算書', accent: P, amt: c.mc,
+    row: { key: 'mc', label: '限界利益', value: c.mc, kind: 'sub', note: '限界利益率 ' + drillPct(c.mcRate * 100) },
+    qs: [
+      { step: '意味', q: '限界利益 ' + n(c.mc) + '（限界利益率 ' + drillPct(c.mcRate * 100) + '）は何を表すか。',
+        opts: [
+          { t: '固定費の回収と利益にあてられる金額', ok: true },
+          { t: '最終的に手元に残る利益' },
+          { t: '売上から全部の原価を引いた儲け' },
+          { t: '1個追加で売ったときに増える売上' }],
+        why: '限界利益率 ' + drillPct(c.mcRate * 100) + ' は「売上1円あたり ' + drillNum(c.mcRate, 2) + ' 円が固定費の回収に回る」という意味。この読み替えができるとBEPの式を暗記しなくてよくなる。' }],
+  });
+
+  s.push({
+    name: '固定費', tag: '②損益計算書', accent: A, amt: c.fixed,
+    row: { key: 'fixed', label: '固定費', value: -c.fixed },
+    qs: [
+      { step: '判断', q: '工場長の給与は固定費だが、生産量が一定を超えると増員が必要になる。この費用の呼び名は。',
+        opts: [
+          { t: '準固定費（一定範囲では固定、段階的に増える）', ok: true },
+          { t: '準変動費（固定部分と変動部分がある）' },
+          { t: '純粋な変動費' },
+          { t: '埋没原価' }],
+        why: '段階的に増えるのが準固定費、基本料金＋従量料金型（水道光熱費など）が準変動費。準変動費は高低点法で2つに分解する。' }],
+  });
+
+  s.push({
+    name: '営業利益', tag: '②損益計算書', accent: P, amt: c.op,
+    row: { key: 'op', label: '営業利益', value: c.op, kind: 'total' },
+    qs: [
+      { step: '確認', q: '限界利益 ' + n(c.mc) + ' − 固定費 ' + n(c.fixed) + ' ＝ ' + n(c.op) + '。この表が完成したことで、次に何がすぐ出せるようになったか。',
+        opts: [
+          { t: '限界利益率が確定したので、BEP売上高がすぐ出せる', ok: true },
+          { t: '売上原価が確定したので、売上総利益が出せる' },
+          { t: '総資本が確定したので、ROAが出せる' },
+          { t: '営業CFが確定したので、FCFが出せる' }],
+        why: 'CVPの計算は全部この表から派生する。試験でも、まずこの5行を書いてしまうのがいちばん速い。' }],
+  });
+
+  s.push({
+    name: '損益分岐点売上高', tag: '③指標', accent: G,
+    metric: { key: 'bep', label: 'BEP売上高', value: drillNum(c.bepSales) + '　（' + drillNum(c.bepQty) + '個）' },
+    qs: [
+      { step: '1／2　公式', q: 'BEP売上高を求める式はどれか。',
+        opts: [
+          { t: '固定費 ÷ 限界利益率', ok: true },
+          { t: '固定費 ÷ 変動費率' },
+          { t: '固定費 ÷ 限界利益' },
+          { t: '固定費 × 限界利益率' }],
+        why: '限界利益率 ' + drillPct(c.mcRate * 100) + ' は売上1円あたりの固定費回収額。固定費 ' + n(c.fixed) + ' を回収するには ' + n(c.fixed) + ' ÷ ' + drillNum(c.mcRate, 3) + ' ＝ ' + drillNum(c.bepSales) + ' の売上がいる。変動費率で割るのが最頻出のミス。' },
+      { step: '2／2　目標利益', q: '目標利益 ' + n(c.fixed / 2) + ' を達成する売上高の式は。',
+        opts: [
+          { t: '（固定費 ＋ 目標利益）÷ 限界利益率', ok: true },
+          { t: '（固定費 ＋ 目標利益）÷ 変動費率' },
+          { t: '固定費 ÷ 限界利益率 ＋ 目標利益' },
+          { t: '（固定費 − 目標利益）÷ 限界利益率' }],
+        why: '目標利益は「回収すべき固定費が増えた」のと同じ扱い。分子に足すだけで、分母は限界利益率のまま変わらない。' }],
+  });
+
+  s.push({
+    name: '安全余裕率', tag: '③指標', accent: G,
+    metric: { key: 'safety', label: '安全余裕率', value: drillPct(c.safety) + '　（損益分岐点比率 ' + drillPct(c.bepRate) + '）' },
+    qs: [
+      { step: '読み方', q: '安全余裕率 ' + drillPct(c.safety) + ' を助言に使うとどう言えるか。',
+        opts: [
+          { t: '売上が ' + drillPct(c.safety) + ' 落ちると赤字に転落する', ok: true },
+          { t: '売上を ' + drillPct(c.safety) + ' 伸ばせば黒字化する' },
+          { t: '固定費を ' + drillPct(c.safety) + ' 削減する必要がある' },
+          { t: '利益率が ' + drillPct(c.safety) + ' であることを示す' }],
+        why: '安全余裕率 ＝ (売上高 − BEP売上高) ÷ 売上高 ＝ 100% − 損益分岐点比率。「あとどれだけ売上が落ちても耐えられるか」の余裕幅で、需要変動リスクを語るときの根拠になる。' }],
+  });
+
+  s.push({
+    name: '営業レバレッジ', tag: '③指標', accent: G,
+    metric: { key: 'lev', label: '営業レバレッジ', value: drillNum(c.leverage, 2) + ' 倍' },
+    qs: [
+      { step: '1／2　意味', q: '営業レバレッジ（限界利益 ÷ 営業利益）は ' + drillNum(c.leverage, 2) + ' 倍。これは何を意味するか。',
+        opts: [
+          { t: '売上が1%増えると営業利益が ' + drillNum(c.leverage, 2) + '% 増える', ok: true },
+          { t: '営業利益が売上の ' + drillNum(c.leverage, 2) + ' 倍ある' },
+          { t: '固定費が変動費の ' + drillNum(c.leverage, 2) + ' 倍ある' },
+          { t: '売上が ' + drillNum(c.leverage, 2) + '% 落ちると赤字になる' }],
+        why: '固定費が大きいほど、売上の変化が営業利益に何倍にもなって効く。BEPを超えたあとの伸びも大きいが、割り込んだときの落ち込みも大きい、という両刃の性質。' },
+      { step: '2／2　助言', q: '需要変動が激しい業界にいるD社への助言として適切なのは。',
+        opts: [
+          { t: '外注活用などで固定費を変動費化し、営業レバレッジを下げる', ok: true },
+          { t: '設備投資を増やして固定費を厚くし、レバレッジを高める' },
+          { t: '変動費率を上げて限界利益率を下げる' },
+          { t: '安全余裕率を下げて損益分岐点を引き上げる' }],
+        why: '固定費型は好況に強く不況に弱い。需要が読めないなら固定費を変動費に振り替えて損益分岐点を下げるのが定石。逆に需要が安定していれば固定費型のほうが利益は伸びる。' }],
+  });
+
+  return { steps: s, info: c };
+}
+
+function buildCvpMixSteps(c) {
+  const s = drillSteps();
+  const n = drillInt;
+  const A = C.accent, G = C.gold;
+  const r = c.ranked;
+  const top = r[0], second = r[1];
+  const byUnit = [...c.items].sort((a, b) => b.mcU - a.mcU)[0];
+
+  s.push({
+    name: '単位あたり限界利益', tag: '①基礎', accent: A,
+    show: 'mcU',
+    qs: [
+      { step: '計算', q: '3製品の単位あたり限界利益を出す。使う式は。',
+        opts: [
+          { t: '販売単価 − 単位あたり変動費', ok: true },
+          { t: '販売単価 − 単位あたり変動費 − 固定費の按分額' },
+          { t: '販売単価 × 限界利益率 ÷ 機械時間' },
+          { t: '販売単価 − 単位あたり総原価' }],
+        why: '固定費はどの製品を作っても発生するので、製品ごとの優劣判断には持ち込まない。固定費を按分して「製品別の営業利益」で判断すると答えを間違える。' }],
+  });
+
+  s.push({
+    name: '制約条件を見つける', tag: '②制約', accent: G,
+    qs: [
+      { step: '1／2　ボトルネック',
+        q: '機械稼働時間は月 ' + n(c.limit) + ' 時間しかない。全製品を需要上限まで作ると ' + drillNum(c.items.reduce((a, x) => a + x.demand * x.hours, 0), 1) + ' 時間かかる。この状況を何と呼ぶか。',
+        opts: [
+          { t: '機械稼働時間が制約条件（ボトルネック）になっている', ok: true },
+          { t: '需要が制約条件になっている' },
+          { t: '固定費が制約条件になっている' },
+          { t: '制約はなく、需要をすべて満たせる' }],
+        why: '足りない資源がひとつあるとき、利益を最大化する鍵はその資源の使い方だけ。制約がなければ需要上限まで全部作れば最大になる。' },
+      { step: '2／2　順位の基準',
+        q: 'どの製品から優先して作るべきか。順位づけの基準は。',
+        opts: [
+          { t: '制約1単位（機械1時間）あたりの限界利益', ok: true },
+          { t: '単位あたりの限界利益' },
+          { t: '限界利益率（限界利益 ÷ 売価）' },
+          { t: '販売単価' }],
+        why: '足りないのは機械時間なので、「1時間で稼げる限界利益」が大きいものから埋める。'
+          + (c.trap
+            ? '今回は単位あたり限界利益が最大なのは' + byUnit.name + '（' + n(byUnit.mcU) + '）だが、機械時間が長いため1時間あたりでは' + top.name + 'に負ける。ここが最大の引っかけ。'
+            : '今回はたまたま両者の順位が一致しているが、機械時間が製品ごとに違うときは必ず食い違いうる。') }],
+  });
+
+  s.push({
+    name: '制約あたり限界利益', tag: '②制約', accent: G,
+    show: 'mcPerH',
+    qs: [
+      { step: '計算', q: '制約1単位あたりの限界利益を求める式は。',
+        opts: [
+          { t: '単位あたり限界利益 ÷ 1個あたりの機械時間', ok: true },
+          { t: '単位あたり限界利益 × 1個あたりの機械時間' },
+          { t: '限界利益率 ÷ 1個あたりの機械時間' },
+          { t: '売上高 ÷ 総機械時間' }],
+        why: '「稼ぎ ÷ 使う資源」で資源1単位あたりの効率が出る。' + top.name + 'が ' + drillNum(top.mcPerH, 2) + '／時間で最も高く、ここから順に埋めていく。' }],
+  });
+
+  s.push({
+    name: '生産量を割り当てる', tag: '③配分', accent: A,
+    plan: true,
+    qs: [
+      { step: '1／2　割当のしかた',
+        q: '順位が決まった。' + top.name + 'にどれだけ割り当てるか。',
+        opts: [
+          { t: '需要上限 ' + n(top.demand) + '個まで作る（それ以上は売れない）', ok: true },
+          { t: '機械時間 ' + n(c.limit) + ' 時間をすべて ' + top.name + 'に使う' },
+          { t: '3製品に機械時間を均等配分する' },
+          { t: '需要の比率で機械時間を配分する' }],
+        why: '順位1位でも、需要を超えて作れば売れ残る。「需要上限まで作る → 余った資源を次の順位へ」を繰り返すのが手順。' },
+      { step: '2／2　打ち切り',
+        q: '順位を下って、残り時間が次の製品の需要をまかなえなくなった。どうするか。',
+        opts: [
+          { t: '残り時間で作れるだけ作る（端数の生産量になる）', ok: true },
+          { t: 'その製品は作らない' },
+          { t: '需要上限まで作れるよう、上位製品の生産を減らす' },
+          { t: '残り時間は使わず余らせる' }],
+        why: '制約1単位あたりの限界利益がプラスである限り、資源は使い切るのが得。上位を削って下位を優先する理由はどこにもない。' }],
+  });
+
+  s.push({
+    name: '最適プロダクトミックス', tag: '④結論', accent: C.purple,
+    result: true,
+    qs: [
+      { step: '確認', q: '固定費 ' + n(c.mixFixed) + ' を差し引いて営業利益 ' + n(c.mixOp) + ' が出た。この解き方で正しいのはどれか。',
+        opts: [
+          { t: '限界利益の合計を最大にすれば、固定費は一定なので営業利益も最大になる', ok: true },
+          { t: '製品別の営業利益を計算し、赤字の製品を外すべきだった' },
+          { t: '固定費を機械時間で按分して製品別に配賦すべきだった' },
+          { t: '売上高が最大になる組み合わせを選ぶべきだった' }],
+        why: '固定費はどう作っても変わらないので、限界利益の合計だけを見れば足りる。固定費を按分して製品別営業利益を出すと、本当は作るべき製品を「赤字だから」と切ってしまう典型的な誤りになる。' }],
+  });
+
+  return { steps: s, info: c };
+}
+
+function CvpDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish} onExit={onExit}
+      meta={{
+        key: 'cvp', icon: '📊', title: 'CVPドリル', accent: C.accent,
+        lead: '高低点法で固定費と変動費に分け、変動損益計算書を組み立ててBEP・安全余裕率・営業レバレッジまで。金額は毎回変わります。',
+      }}
+      modes={[
+        { id: 'basic', icon: '📐', title: '基本', desc: '固変分解 → 変動損益計算書 → BEP売上高・安全余裕率・営業レバレッジ。9項目14問。', xp: 90 },
+        { id: 'mix',   icon: '🏭', title: 'セールスミックス', desc: '機械時間の制約下で、どの製品から作るか。制約1単位あたり限界利益で順位づけ。5項目7問。', xp: 90 },
+      ]}
+      build={(m) => {
+        const c = buildCvpCase(m);
+        const built = m === 'basic' ? buildCvpBasicSteps(c) : buildCvpMixSteps(c);
+        return { ...built, ledger: { rows: [], metrics: [], show: [], plan: false, result: false } };
+      }}
+      applyStep={(ledger, step) => ({
+        rows:    step.row ? [...ledger.rows, step.row] : ledger.rows,
+        metrics: step.metric ? [...ledger.metrics, step.metric] : ledger.metrics,
+        show:    step.show ? [...ledger.show, step.show] : ledger.show,
+        plan:    ledger.plan || !!step.plan,
+        result:  ledger.result || !!step.result,
+      })}
+      headerNote={(info) => info.mode === 'basic'
+        ? (<>単位：千円<br />単価 {drillInt(info.price)}／個</>)
+        : (<>単位：千円<br />機械 {drillInt(info.limit)} 時間</>)}
+      hint={(step) => step.tag === '①固変分解'
+        ? '生産量が変わったとき、その費用が比例して動くかで考えてみてください。'
+        : '固定費は製品ごとの判断に持ち込まない、足りない資源1単位あたりで比べる、で考えてみてください。'}
+      nextLabel={() => '表に記入する'}
+      renderLedger={(ledger, info) => info.mode === 'basic'
+        ? <CvpBasicLedger ledger={ledger} info={info} />
+        : <CvpMixLedger ledger={ledger} info={info} />}
+      renderResult={(ledger, info, missed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          {info.mode === 'basic' ? (
             <>
-              <div style={{
-                marginTop: 12, padding: '12px 13px', borderRadius: 10,
-                background: phase === 'right' ? C.green + '14' : C.red + '14',
-                border: `1px solid ${phase === 'right' ? C.green : C.red}44`,
-                fontSize: 13, color: C.text, lineHeight: 1.7,
-              }}>
-                <div style={{
-                  fontWeight: 700, marginBottom: 3,
-                  color: phase === 'right' ? C.green : C.red,
-                }}>{phase === 'right' ? 'そのとおり' : '正解はこちら'}</div>
-                {q.why}
+              <div style={{ fontSize: 13, color: C.muted }}>損益分岐点売上高</div>
+              <div style={{ fontSize: 32, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.accent }}>
+                {drillNum(info.bepSales)}
               </div>
-              <button onClick={next} style={{
-                marginTop: 12, width: '100%', padding: 13, borderRadius: 10, border: 'none',
-                background: phase === 'right' ? C.purple : C.border,
-                color: phase === 'right' ? '#fff' : C.text,
-                fontWeight: 700, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                {qi + 1 < step.qs.length ? '次の分岐へ'
-                  : step.phase === 'table' ? '表に書き込む' : '計算に反映する'}
-              </button>
+              <div style={{ fontSize: 13, color: C.text, marginTop: 6 }}>
+                安全余裕率 {drillPct(info.safety)}／営業レバレッジ {drillNum(info.leverage, 2)} 倍
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, color: C.muted }}>最適プロダクトミックスの営業利益</div>
+              <div style={{ fontSize: 32, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.accent }}>
+                {drillNum(info.mixOp)}
+              </div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 6, lineHeight: 1.7 }}>
+                {info.plan.map(p => p.name + ' ' + drillInt(p.make) + '個').join('／')}
+              </div>
             </>
           )}
         </div>
-      ) : null}
-    </div>
+      )}
+    />
   );
 }
+
+function CvpBasicLedger({ ledger, info }) {
+  return (
+    <>
+      <DrillCard title="高低点法のデータ" color={C.muted}>
+        <div style={{ padding: '2px 0 6px' }}>
+          <DrillRow label={'最高操業度　' + drillInt(info.qHigh) + '個'} value={drillInt(info.costHigh)} />
+          <DrillRow label={'最低操業度　' + drillInt(info.qLow) + '個'} value={drillInt(info.costLow)} />
+          <DrillRow label="当月販売量" value={drillInt(info.qty) + '個'} top />
+        </div>
+      </DrillCard>
+
+      <DrillCard title="変動損益計算書" color={C.accent}>
+        <div style={{ padding: '2px 0 6px' }}>
+          {ledger.rows.length === 0 && (
+            <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px' }}>
+              上から順に、判断した行が積み上がります。
+            </div>
+          )}
+          {ledger.rows.map(r => (
+            <DrillRow key={r.key} label={r.label} note={r.note}
+              value={r.kind ? drillInt(Math.abs(r.value)) : drillSigned(r.value, 0)}
+              bold={!!r.kind} top={r.kind === 'total'}
+              bg={r.kind === 'total' ? C.purple + '18' : r.kind === 'sub' ? '#0d1117' : undefined}
+              color={r.kind === 'total' ? C.purple : undefined}
+              valueColor={r.kind ? (r.kind === 'total' ? C.purple : C.text) : (r.value >= 0 ? C.green : C.red)} />
+          ))}
+        </div>
+      </DrillCard>
+
+      {ledger.metrics.length > 0 && (
+        <DrillCard title="指標" color={C.gold} style={{ marginBottom: 16 }}>
+          <div style={{ padding: '2px 0 6px' }}>
+            {ledger.metrics.map(m => (
+              <DrillRow key={m.key} label={m.label} value={m.value} valueColor={C.gold} bold />
+            ))}
+          </div>
+        </DrillCard>
+      )}
+    </>
+  );
+}
+
+function CvpMixLedger({ ledger, info }) {
+  const cols = '1fr 46px 46px 46px';
+  const head = (a, b, cc, d) => (
+    <div style={{
+      display: 'grid', gridTemplateColumns: cols, gap: 5, padding: '5px 12px',
+      fontSize: 10, color: C.muted, fontWeight: 700, borderBottom: `1px solid ${C.border}`,
+    }}>
+      <span>{a}</span>
+      <span style={{ textAlign: 'right' }}>{b}</span>
+      <span style={{ textAlign: 'right' }}>{cc}</span>
+      <span style={{ textAlign: 'right' }}>{d}</span>
+    </div>
+  );
+  const row = (label, b, cc, d, hi) => (
+    <div key={label} style={{
+      display: 'grid', gridTemplateColumns: cols, gap: 5, padding: '5px 12px', fontSize: 11,
+      background: hi ? C.gold + '14' : 'transparent',
+    }}>
+      <span style={{ color: C.text }}>{label}</span>
+      <span style={{ textAlign: 'right', color: C.text }}>{b}</span>
+      <span style={{ textAlign: 'right', color: C.text }}>{cc}</span>
+      <span style={{ textAlign: 'right', color: C.text }}>{d}</span>
+    </div>
+  );
+  return (
+    <>
+      <DrillCard title="製品データ" color={C.accent}>
+        <div style={{ padding: '0 0 6px' }}>
+          {head('項目', info.items[0].name.slice(-1), info.items[1].name.slice(-1), info.items[2].name.slice(-1))}
+          {row('販売単価', ...info.items.map(i => drillInt(i.price)))}
+          {row('単位変動費', ...info.items.map(i => drillInt(i.vcost)))}
+          {row('機械時間／個', ...info.items.map(i => drillNum(i.hours, 1)))}
+          {row('需要上限', ...info.items.map(i => drillInt(i.demand)))}
+          {ledger.show.includes('mcU') && row('単位限界利益', ...info.items.map(i => drillInt(i.mcU)), true)}
+          {ledger.show.includes('mcPerH') && row('時間あたり限界利益', ...info.items.map(i => drillNum(i.mcPerH, 1)), true)}
+        </div>
+      </DrillCard>
+
+      {ledger.plan && (
+        <DrillCard title={'生産計画（機械 ' + drillInt(info.limit) + ' 時間）'} color={C.gold} style={{ marginBottom: 16 }}>
+          <div style={{ padding: '2px 0 6px' }}>
+            {info.plan.map((p, k) => (
+              <DrillRow key={p.name}
+                label={'第' + (k + 1) + '順位　' + p.name}
+                note={drillNum(p.mcPerH, 1) + '／時間'}
+                value={drillInt(p.make) + '個　' + drillNum(p.hoursUsed, 1) + 'h'} />
+            ))}
+            <DrillRow label="使用時間 合計" value={drillNum(info.limit - info.restHours, 1) + 'h / ' + drillNum(info.limit, 1) + 'h'} top color={C.muted} />
+            {ledger.result && (
+              <>
+                <DrillRow label="限界利益 合計" value={drillInt(info.mixMc)} top bold />
+                <DrillRow label="固定費" value={'−' + drillInt(info.mixFixed)} />
+                <DrillRow label="営業利益" value={drillInt(info.mixOp)} bold top
+                  bg={C.purple + '18'} color={C.purple} valueColor={C.purple} />
+              </>
+            )}
+          </div>
+        </DrillCard>
+      )}
+    </>
+  );
+}
+
+// ============================================================
+// 差額原価ドリル（意思決定会計：関連原価と埋没原価の仕分け）
+// ============================================================
+
+// 仕分けの選択肢は全モード共通。項目ごとに正解だけが変わる。
+const DIFF_KINDS = {
+  plus:  '差額表に ＋ で計上する（この案を選ぶと、収益が増えるか原価が減る）',
+  minus: '差額表に − で計上する（この案を選ぶと、原価が増えるか収益が減る）',
+  sunk:  '計上しない（どちらの案を選んでも変わらない＝埋没原価）',
+  none:  '計上しない（金額が確定していないため）',
+};
+
+function diffOpts(correct) {
+  return Object.entries(DIFF_KINDS).map(([k, t]) => ({ t, ok: k === correct }));
+}
+
+function buildDiffCase(mode) {
+  const c = { mode, tax: drillPick([30, 40]) };
+  if (mode === 'order') {
+    c.sq    = drillRnd(2000, 6000, 500);                 // 特殊注文の数量
+    c.price = drillRnd(900, 1400, 50);                   // 通常の販売単価（円）
+    c.sp    = drillRnd(600, 850, 10);                    // 提示された特別価格
+    c.vc    = drillRnd(350, 520, 10);                    // 単位変動製造費
+    c.voh   = drillRnd(50, 120, 10);                     // 単位変動製造間接費
+    c.foh   = drillRnd(150, 300, 10);                    // 単位あたり固定製造間接費の配賦額
+    c.mold  = drillRnd(200000, 900000, 50000);           // 専用金型費（回避可能固定費）
+    c.ship  = drillRnd(20, 80, 10);                      // 追加運送費／個
+    c.idle  = drillRnd(3000, 9000, 500);                 // 遊休能力（個）
+  } else if (mode === 'make') {
+    c.q     = drillRnd(8000, 20000, 1000);
+    c.vc    = drillRnd(280, 450, 10);                    // 内製の単位変動費
+    c.sup   = drillRnd(1200000, 3000000, 100000);        // 監督者給与（外注なら不要）
+    c.dep   = drillRnd(800000, 2000000, 100000);         // 専用設備の減価償却費
+    c.alloc = drillRnd(1500000, 4000000, 100000);        // 共通固定費の配賦額
+    c.pp    = drillRnd(300, 480, 10);                    // 外注の購入単価
+    c.insp  = drillRnd(10, 40, 5);                       // 受入検査費／個
+    c.rent  = drillRnd(0, 1500000, 300000);              // 空いた設備スペースの賃貸収入
+  } else if (mode === 'drop') {
+    c.sales  = drillRnd(20000000, 45000000, 1000000);    // B事業部の売上高
+    c.vcRate = drillRnd(55, 72, 1) / 100;
+    c.vc     = Math.round(c.sales * c.vcRate);
+    c.direct = drillRnd(4000000, 9000000, 500000);       // 個別固定費（回避可能）
+    c.common = drillRnd(5000000, 12000000, 500000);      // 共通固定費の配賦額
+    c.spill  = drillRnd(0, 4000000, 500000);             // 他事業部への波及減収
+    c.rent   = drillRnd(0, 6000000, 1000000);            // 空いた店舗の賃貸収入
+  } else {
+    c.units  = drillRnd(3000, 8000, 500);                // 連産品Xの数量
+    c.priceX = drillRnd(800, 1500, 50);                  // 分離点での売価
+    c.priceY = c.priceX + drillRnd(300, 900, 50);        // 追加加工後の売価
+    c.joint  = drillRnd(2000000, 6000000, 500000);       // 結合原価の配賦額
+    c.addVc  = drillRnd(150, 450, 10);                   // 追加加工費（変動）
+    c.addFix = drillRnd(300000, 1500000, 100000);        // 追加加工専用設備の費用
+    c.yield  = drillRnd(85, 100, 5) / 100;               // 追加加工後の歩留まり
+  }
+  return c;
+}
+
+// モードごとの「項目リスト」。sign は差額表への計上方向
+function diffItems(c) {
+  const y = drillInt;
+  if (c.mode === 'order') {
+    const idleOk = c.idle >= c.sq;
+    return {
+      title: '特殊注文を受ける場合の差額',
+      lead: '通常単価 ' + y(c.price) + '円の製品に、' + y(c.sq) + '個を単価 ' + y(c.sp) + '円で という引き合いが来た。',
+      decide: '受注する', reject: '受注しない',
+      items: [
+        { label: '特殊注文の売上高', amt: c.sq * c.sp, kind: 'plus',
+          q: '単価 ' + y(c.sp) + '円 × ' + y(c.sq) + '個 の売上をどう扱うか。',
+          why: 'この注文を受けたときだけ入ってくる収益なので、差額収益として＋。通常単価 ' + y(c.price) + '円を下回っていること自体は、受否の理由にならない。' },
+        { label: '変動製造費', amt: c.sq * c.vc, kind: 'minus',
+          q: '単位変動製造費 ' + y(c.vc) + '円（材料費・直接労務費）はどう扱うか。',
+          why: '作った分だけ増える純粋な変動費なので、差額原価として−。ここは迷いどころがない。' },
+        { label: '変動製造間接費', amt: c.sq * c.voh, kind: 'minus',
+          q: '変動製造間接費 ' + y(c.voh) + '円／個 はどう扱うか。',
+          why: '「間接費」でも変動費なら生産量に比例して増える。科目名ではなく、注文を受けたときに増えるかどうかで判断する。' },
+        { label: '固定製造間接費の配賦額', amt: c.sq * c.foh, kind: 'sunk',
+          q: '原価計算上、製品1個に固定製造間接費 ' + y(c.foh) + '円 が配賦されている。どう扱うか。',
+          why: 'この設問の最大の落とし穴。工場の固定費の総額は、注文を受けても受けなくても変わらない。配賦額は計算上の割り振りにすぎず、現金は1円も動かない。これを原価に含めると、受けるべき注文を断ってしまう。' },
+        { label: '専用金型の製作費', amt: c.mold, kind: 'minus',
+          q: 'この注文専用の金型 ' + y(c.mold) + '円 が必要になる。固定費だが、どう扱うか。',
+          why: '固定費でも「受注したときだけ発生する」なら関連原価。回避可能固定費と呼ぶ。固定費だから無視、と機械的に処理してはいけない。' },
+        { label: '追加の運送費', amt: c.sq * c.ship, kind: 'minus',
+          q: '遠方への納品で運送費が ' + y(c.ship) + '円／個 余計にかかる。どう扱うか。',
+          why: '製造原価でなくても、この注文のせいで増える支出はすべて差額原価。販売費・物流費の増加を数え落とすのは定番の失点。' },
+        { label: '遊休能力による機会原価', amt: 0, kind: 'sunk',
+          q: '現在の遊休生産能力は ' + y(c.idle) + '個。今回の注文は ' + y(c.sq) + '個。機会原価をどう扱うか。',
+          why: idleOk
+            ? '遊休能力（' + y(c.idle) + '個）で足りるので、通常品を減らす必要がない。犠牲になるものがないので機会原価はゼロ。もし能力が足りなければ、減産する通常品の限界利益を機会原価として−で計上する。'
+            : '本来は能力が不足するので通常品の減産による限界利益の逸失を計上する場面。今回は減産しない前提が置かれているため計上しない。' },
+      ],
+    };
+  }
+  if (c.mode === 'make') {
+    return {
+      title: '外注に切り替える場合の差額',
+      lead: '年間 ' + y(c.q) + '個の部品を内製している。単価 ' + y(c.pp) + '円で外注する話が来た。',
+      decide: '外注に切り替える', reject: '内製を続ける',
+      items: [
+        { label: '内製の変動製造費（なくなる）', amt: c.q * c.vc, kind: 'plus',
+          q: '内製の単位変動費 ' + y(c.vc) + '円 × ' + y(c.q) + '個 はどうなるか。',
+          why: '外注すれば材料も直接労務も不要になる。「なくなる原価」は、この案を選ぶことで得られる効果なので差額表には＋で入る。' },
+        { label: '監督者給与（なくなる）', amt: c.sup, kind: 'plus',
+          q: 'この工程専属の監督者の給与 ' + y(c.sup) + '円 はどう扱うか。',
+          why: '固定費でも、外注すれば配置転換や不補充で消せるなら回避可能固定費。消せる固定費は＋で計上する。' },
+        { label: '専用設備の減価償却費', amt: c.dep, kind: 'sunk',
+          q: '専用設備の減価償却費 ' + y(c.dep) + '円 はどう扱うか（設備は売却も転用もしない）。',
+          why: '設備を持ち続ける限り、外注しても減価償却費は同じだけ計上される。過去の支出を配分しているだけで、いま意思決定しても消えない典型的な埋没原価。売却できるなら、その売却収入は別途＋で計上する。' },
+        { label: '共通固定費の配賦額', amt: c.alloc, kind: 'sunk',
+          q: '工場の共通固定費から ' + y(c.alloc) + '円 が配賦されている。どう扱うか。',
+          why: '本社費・工場共通費の総額は、この部品を外注しても変わらない。配賦をやめても費用は消えず、他の製品に付け替わるだけ。' },
+        { label: '外注の購入代金', amt: c.q * c.pp, kind: 'minus',
+          q: '外注単価 ' + y(c.pp) + '円 × ' + y(c.q) + '個 はどう扱うか。',
+          why: '外注に切り替えたときだけ発生する新しい支出なので−。' },
+        { label: '受入検査費', amt: c.q * c.insp, kind: 'minus',
+          q: '外注品の受入検査に ' + y(c.insp) + '円／個 かかる。どう扱うか。',
+          why: '外注は購入代金だけでは終わらない。検査・運送・不良対応などの付随コストを数え落とすと、外注が実際より有利に見えてしまう。' },
+        { label: '空いたスペースの賃貸収入', amt: c.rent, kind: c.rent > 0 ? 'plus' : 'sunk',
+          q: c.rent > 0
+            ? '外注すれば空くスペースを年 ' + y(c.rent) + '円 で貸せる。どう扱うか。'
+            : '外注してもスペースは他工程が使うため、賃貸などの転用はできない。どう扱うか。',
+          why: c.rent > 0
+            ? '外注を選んだからこそ得られる収入なので＋。これは機会原価の裏返しで、内製を続ける案から見れば「賃貸収入を諦めている」＝機会原価にあたる。'
+            : '転用できないなら、どちらの案でも収入は生まれない。差が出ないものは計上しない。' },
+      ],
+    };
+  }
+  if (c.mode === 'drop') {
+    return {
+      title: 'B事業部を廃止する場合の差額',
+      lead: 'B事業部は共通費配賦後の損益が赤字。廃止すべきかを差額で確かめる。',
+      decide: '廃止する', reject: '存続させる',
+      items: [
+        { label: 'B事業部の売上高（失う）', amt: c.sales, kind: 'minus',
+          q: 'B事業部の売上高 ' + y(c.sales) + '円 はどうなるか。',
+          why: '廃止すればこの売上は消える。収益が減るので差額表には−で入る。' },
+        { label: 'B事業部の変動費（なくなる）', amt: c.vc, kind: 'plus',
+          q: '変動費 ' + y(c.vc) + '円 はどうなるか。',
+          why: '廃止すれば売上とともに変動費も消える。なくなる原価なので＋。売上−変動費＝貢献利益が、この判断の出発点になる。' },
+        { label: '個別固定費（なくなる）', amt: c.direct, kind: 'plus',
+          q: '事業部長の給与や専用店舗の賃借料など個別固定費 ' + y(c.direct) + '円 はどうなるか。',
+          why: 'B事業部があるからこそ発生している固定費なので、廃止すれば消える＝回避可能固定費。＋で計上する。' },
+        { label: '共通固定費の配賦額', amt: c.common, kind: 'sunk',
+          q: '本社費から ' + y(c.common) + '円 が配賦されている。どう扱うか。',
+          why: 'この設問の核心。本社費の総額は事業部を畳んでも変わらず、A事業部へ付け替わるだけ。配賦後の赤字を理由に廃止すると、貢献利益の分だけ全社利益が悪化する。「配賦後赤字でも貢献利益が黒字なら残す」が原則。' },
+        { label: '他事業部への波及減収', amt: c.spill, kind: c.spill > 0 ? 'minus' : 'sunk',
+          q: c.spill > 0
+            ? 'B事業部の来店客がA事業部でも買っており、廃止するとA事業部の限界利益が ' + y(c.spill) + '円 減る。どう扱うか。'
+            : 'B事業部とA事業部に客層の重なりはなく、廃止しても他事業部の売上は変わらない。どう扱うか。',
+          why: c.spill > 0
+            ? '廃止という判断が原因で起きる他部門の減益も、立派な差額。部門単位で切り出して考えると見落としやすい補完関係の論点。'
+            : '波及がないなら差は出ないので計上しない。ただし本試験では「客層が重なる」と書かれていたら必ず拾う。' },
+        { label: '空いた店舗の賃貸収入', amt: c.rent, kind: c.rent > 0 ? 'plus' : 'sunk',
+          q: c.rent > 0
+            ? '廃止すれば店舗を年 ' + y(c.rent) + '円 で賃貸できる。どう扱うか。'
+            : '店舗は自社所有だが立地が悪く、賃貸も売却もできない見込みである。どう扱うか。',
+          why: c.rent > 0
+            ? '廃止を選んだからこそ生まれる収入なので＋。存続案から見れば、この賃貸収入が機会原価になる。'
+            : '転用できないなら差は出ない。「使えるはずだ」と勝手に補わず、与件文に書かれた条件で判断する。' },
+      ],
+    };
+  }
+  return {
+    title: '追加加工する場合の差額',
+    lead: '連産品Xは分離点でそのまま売れるが、さらに加工して製品X′として売る案がある。',
+    decide: '追加加工する', reject: '分離点で売る',
+    items: [
+      { label: '追加加工後の売上増', amt: c.units * c.yield * c.priceY - c.units * c.priceX, kind: 'plus',
+        q: '分離点なら ' + y(c.priceX) + '円／個、加工すれば ' + y(c.priceY) + '円／個 で売れる（歩留まり ' + drillPct(c.yield * 100, 0) + '）。売上の差をどう扱うか。',
+        why: '比べるのは「加工後の売上」と「分離点で売った場合の売上」の差。加工後の売上をまるごと＋にすると、分離点で売れたはずの分を二重に数えてしまう。歩留まりの低下分もここで効く。' },
+      { label: '結合原価の配賦額', amt: c.joint, kind: 'sunk',
+        q: '分離点までにかかった結合原価から ' + y(c.joint) + '円 が配賦されている。どう扱うか。',
+        why: 'この設問の核心。結合原価は分離点より前に発生済みで、加工してもしなくても同額かかる。配賦のしかたを変えても総額は動かない、典型的な埋没原価。' },
+      { label: '追加加工の変動費', amt: c.units * c.addVc, kind: 'minus',
+        q: '追加加工の変動費 ' + y(c.addVc) + '円／個 はどう扱うか。',
+        why: '分離点より後に、加工を選んだ場合だけ発生する原価なので−。判断の分かれ目より後ろで発生するかどうかが仕分けの基準になる。' },
+      { label: '追加加工専用の固定費', amt: c.addFix, kind: 'minus',
+        q: '追加加工のために新たに借りる設備の費用 ' + y(c.addFix) + '円 はどう扱うか。',
+        why: '固定費でも、加工を選んだときだけ新たに発生するなら関連原価。結合原価（埋没）とこの設備費（関連）は、どちらも固定費だが扱いが正反対になる。' },
+    ],
+  };
+}
+
+function buildDiffSteps(c) {
+  const s = drillSteps();
+  const spec = diffItems(c);
+  const SIGN = { plus: 1, minus: -1, sunk: 0, none: 0 };
+  const total = spec.items.reduce((a, it) => a + SIGN[it.kind] * it.amt, 0);
+
+  s.push({
+    name: '判断の原則', tag: '準備', accent: C.muted,
+    qs: [{ step: '差額原価収益分析', q: '2つの案を比べるとき、差額表に並べるのはどれか。',
+      opts: [
+        { t: '案によって金額が変わる収益と原価だけ', ok: true },
+        { t: '関係する収益と原価をすべて漏れなく' },
+        { t: '現金支出をともなう原価だけ' },
+        { t: '変動費だけ（固定費は判断に使わない）' }],
+      why: '差が出ないものは並べても結論を変えないので、最初から除く。逆に「固定費だから無視」は誤りで、案によって消えたり増えたりする固定費は必ず拾う。判断の基準は変動費か固定費かではなく、案によって動くかどうか。' }],
+  });
+
+  for (const it of spec.items) {
+    s.push({
+      name: it.label, tag: '仕分け', accent: C.gold,
+      amt: it.kind === 'sunk' && it.amt === 0 ? null : it.amt,
+      item: { ...it, sign: SIGN[it.kind] },
+      qs: [{ step: '関連原価か埋没原価か', q: it.q, opts: diffOpts(it.kind), why: it.why }],
+    });
+  }
+
+  const go = total > 0;
+  s.push({
+    name: '結論', tag: '判断', accent: C.purple, total,
+    qs: [
+      { step: '1／2　判定',
+        q: '差額を合計すると ' + drillSigned(total, 0) + ' 円。どう判断するか。',
+        opts: [
+          { t: spec.decide + '（差額がプラス）', ok: go },
+          { t: spec.reject + '（差額がマイナス）', ok: !go },
+          { t: '配賦後の損益が黒字かどうかで判断する' },
+          { t: '売上高が大きい案を選ぶ' }],
+        why: go
+          ? '差額がプラスなので、この案を選ぶほうが全社の利益が ' + drillInt(Math.abs(total)) + '円 多くなる。'
+          : '差額がマイナスなので、この案を選ぶと全社の利益が ' + drillInt(Math.abs(total)) + '円 減る。見送るのが正しい。' },
+      { step: '2／2　数字の外',
+        q: '差額の計算とは別に、解答で必ず触れるべきことは。',
+        opts: [
+          { t: '数値化しにくい影響（既存顧客との関係・従業員の士気・技術の流出など）', ok: true },
+          { t: '配賦基準を変えた場合の損益' },
+          { t: '過去3年間の実績推移' },
+          { t: '同業他社の平均原価' }],
+        why: '事例IVの意思決定問題は「計算して終わり」ではなく、必ず留意点を書かせる。特別価格が既存顧客に知られるリスク、外注による技術力の低下、廃止にともなう雇用への影響などは、金額に表れないが助言に欠かせない。' }],
+  });
+
+  return { steps: s, info: { ...c, spec, total } };
+}
+
+function DiffDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish} onExit={onExit}
+      meta={{
+        key: 'diff', icon: '⚖️', title: '差額原価ドリル', accent: C.gold,
+        lead: '意思決定会計は、原価項目を「案によって動くもの（関連原価）」と「動かないもの（埋没原価）」に仕分けるだけで半分が終わります。配賦額をどう扱うかが毎回の勝負どころ。金額は毎回変わります。',
+      }}
+      modes={[
+        { id: 'order', icon: '📋', title: '特殊注文の受否',   desc: '通常より安い価格の引き合い。固定製造間接費の配賦額と専用金型費の扱いが分かれ目。9項目10問。', xp: 90 },
+        { id: 'make',  icon: '🏭', title: '内製 vs 外注',     desc: '外注に切り替えると、どの原価が消えてどの原価が残るか。9項目10問。', xp: 90 },
+        { id: 'drop',  icon: '✂️', title: 'セグメントの廃止', desc: '配賦後赤字の事業部を畳むべきか。共通固定費と補完関係がポイント。8項目9問。', xp: 90 },
+        { id: 'extra', icon: '🔧', title: '追加加工の可否',   desc: '連産品を分離点で売るか、加工して売るか。結合原価の配賦額は埋没原価。6項目7問。', xp: 90 },
+      ]}
+      build={(m) => {
+        const c = buildDiffCase(m);
+        return { ...buildDiffSteps(c), ledger: { rows: [], done: false } };
+      }}
+      applyStep={(ledger, step) => ({
+        rows: step.item ? [...ledger.rows, step.item] : ledger.rows,
+        done: ledger.done || step.total !== undefined,
+      })}
+      headerNote={() => '単位：円'}
+      hint={() => 'その金額は、案を変えたときに動くかどうかで考えてみてください。'}
+      nextLabel={(step) => step.item ? '差額表に記入する' : '結論を出す'}
+      renderLedger={(ledger, info) => (
+        <>
+          <DrillCard title="設定" color={C.muted}>
+            <div style={{ padding: '9px 12px', fontSize: 12, color: C.text, lineHeight: 1.7 }}>
+              {info.spec.lead}
+            </div>
+          </DrillCard>
+          <DrillCard title={info.spec.title} color={C.gold} style={{ marginBottom: 16 }}>
+            <div style={{ padding: '2px 0 6px' }}>
+              {ledger.rows.length === 0 && (
+                <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px' }}>
+                  仕分けた項目から順に、ここへ並びます。
+                </div>
+              )}
+              {ledger.rows.map(r => (
+                <DrillRow key={r.label} label={r.label}
+                  note={r.sign === 0 ? '埋没原価' : undefined}
+                  value={r.sign === 0 ? '—' : drillSigned(r.sign * r.amt, 0)}
+                  color={r.sign === 0 ? C.muted : undefined}
+                  valueColor={r.sign === 0 ? C.muted : r.sign > 0 ? C.green : C.red} />
+              ))}
+              {ledger.done && (
+                <DrillRow label="差額利益" value={drillSigned(info.total, 0)} bold top
+                  bg={C.purple + '18'} color={C.purple}
+                  valueColor={info.total >= 0 ? C.green : C.red} />
+              )}
+            </div>
+          </DrillCard>
+        </>
+      )}
+      renderResult={(ledger, info, missed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>差額利益</div>
+          <div style={{ fontSize: 30, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.purple }}>
+            {drillSigned(info.total, 0)}
+          </div>
+          <div style={{ fontSize: 14, color: info.total > 0 ? C.green : C.red, fontWeight: 700, marginTop: 6 }}>
+            → {info.total > 0 ? info.spec.decide : info.spec.reject}
+          </div>
+        </div>
+      )}
+    />
+  );
+}
+
+// ============================================================
+// 取替投資ドリル（差額キャッシュフロー → NPV）
+// ============================================================
+
+function buildRepCase(mode) {
+  const rate = drillPick([6, 7, 8]);
+  const tax  = drillPick([30, 40]);
+  const t    = tax / 100;
+  const years = 5;
+  const c = { mode, rate, tax, t, years, T: NPV_TABLE[rate] };
+  if (mode === 'renew') {
+    c.newCost  = drillRnd(3000, 6000, 100);            // 新設備の取得原価
+    c.newDep   = c.newCost / years;
+    c.oldBook  = drillRnd(600, 1600, 100);             // 旧設備の帳簿価額
+    // 売却損が出る前提で設問文を組んでいるので、売却価格は必ず簿価より下にする
+    c.oldSell  = c.oldBook - drillRnd(100, 400, 50);   // 旧設備の売却価格
+    c.oldDep   = Math.round(c.oldBook / years / 10) * 10; // 旧設備の年間減価償却費
+    c.saving   = drillRnd(600, 1400, 50);              // 年間の現金支出費用の節約額
+    c.newSalv  = drillRnd(200, 600, 50);               // 5年後の新設備売却額（簿価0）
+    c.oldSalv  = drillRnd(0, 200, 50);                 // 旧設備を使い続けた場合の5年後売却額
+    c.oldLoss  = c.oldBook - c.oldSell;                // 売却損（正なら損）
+    c.oldNet   = Math.round(c.oldSell + c.oldLoss * t);
+    c.depDiff  = c.newDep - c.oldDep;                  // 減価償却費の増加分
+    c.annual   = Math.round(c.saving * (1 - t) + c.depDiff * t);
+    c.lastOnce = Math.round(c.newSalv * (1 - t) - c.oldSalv * (1 - t));
+    c.zero     = -c.newCost + c.oldNet;
+  } else {
+    c.buyCost  = drillRnd(2500, 5000, 100);            // 購入価額
+    c.buyDep   = c.buyCost / years;
+    c.lease    = drillRnd(600, 1200, 50);              // 年間リース料
+    c.salv     = drillRnd(200, 600, 50);               // 5年後の売却額（購入案・簿価0）
+    c.maint    = drillRnd(50, 200, 10);                // 購入案のみ必要な保守料（年）
+    // リース案 − 購入案 の差額
+    c.annual   = Math.round(-c.lease * (1 - t) - c.buyDep * t + c.maint * (1 - t));
+    c.lastOnce = -Math.round(c.salv * (1 - t));
+    c.zero     = c.buyCost;
+  }
+  c.annF = c.T.ann[years - 1];
+  c.pvF  = c.T.pv[years - 1];
+  c.npv  = c.zero + c.annual * c.annF + c.lastOnce * c.pvF;
+  return c;
+}
+
+function buildRepSteps(c) {
+  const s = drillSteps();
+  const n = drillInt;
+  const f3 = x => x.toFixed(3);
+  const A = C.green, P = C.purple;
+  const Y = c.years;
+
+  s.push({
+    name: '比べ方を決める', tag: '準備', accent: C.muted,
+    qs: [{ step: '差額で解く',
+      q: c.mode === 'renew'
+        ? '「旧設備を使い続ける案」と「新設備に取り替える案」を比べる。もっとも速い解き方は。'
+        : '「購入する案」と「リースする案」を比べる。もっとも速い解き方は。',
+      opts: [
+        { t: '2案の差額キャッシュフローだけを並べて、そのNPVを求める', ok: true },
+        { t: '2案それぞれのNPVを別々に求めて引き算する' },
+        { t: '2案それぞれの会計上の利益を比べる' },
+        { t: '初期投資額の小さいほうを選ぶ' }],
+      why: '別々に計算しても答えは同じだが、両案に共通する売上や共通費まで書くことになり、時間も計算ミスも倍になる。差額だけを並べれば、共通項は最初から消える。差額のNPVがプラスなら、基準にした案より有利。' }],
+  });
+
+  const item = (name, amt, when, qs, tag) =>
+    s.push({ name, amt, tag: tag || '差額CF', accent: A, row: { label: name, amt, when }, qs });
+
+  if (c.mode === 'renew') {
+    item('新設備の取得支出', c.newCost, 't=0', [
+      { step: '符号と時点', q: '新設備の取得原価 ' + n(c.newCost) + ' を差額表のどこに置くか。',
+        opts: [
+          { t: 't=0 に −（取替案でだけ出ていく支出）', ok: true },
+          { t: 't=0 に ＋（資産が増えるため）' },
+          { t: 't=1〜' + Y + ' に減価償却費として分割' },
+          { t: '両案で共通なので計上しない' }],
+        why: '現状維持を選べば出ていかない支出なので、取替案の差額として全額を t=0 に−で置く。減価償却として分けるのは会計上の配分であって現金の動きではない。' }]);
+
+    item('旧設備の売却（税引後）', c.oldNet, 't=0', [
+      { step: '1／2　税効果', q: '帳簿価額 ' + n(c.oldBook) + ' の旧設備を ' + n(c.oldSell) + ' で売却する。税金への影響は。',
+        opts: [
+          { t: '売却損 ' + n(c.oldLoss) + ' が出て、税金が ' + n(c.oldLoss * c.t) + ' 減る', ok: true },
+          { t: '売却益 ' + n(c.oldLoss) + ' が出て、税金が ' + n(c.oldLoss * c.t) + ' 増える' },
+          { t: '現金が入るだけで税金には影響しない' },
+          { t: '帳簿価額の全額に税率を掛けた分だけ税金が減る' }],
+        why: '売却損益 ＝ 売却価格 − 帳簿価額 ＝ ' + n(c.oldSell) + ' − ' + n(c.oldBook) + ' ＝ −' + n(c.oldLoss) + '。損が出ると課税所得が減り、その分だけ納税額が軽くなる。' },
+      { step: '2／2　金額', q: 't=0 に計上する正味手取額は。',
+        opts: [
+          { t: '売却価格 ＋ 節税額 ＝ ' + n(c.oldNet), ok: true },
+          { t: '売却価格のみ ＝ ' + n(c.oldSell) },
+          { t: '帳簿価額 ＝ ' + n(c.oldBook) },
+          { t: '売却価格 − 節税額 ＝ ' + n(c.oldSell - c.oldLoss * c.t) }],
+        why: '節税分だけ手元に残る現金が増えるので ' + n(c.oldSell) + ' ＋ ' + n(c.oldLoss * c.t) + ' ＝ ' + n(c.oldNet) + '。これが新設備の支出を軽くする。取替案を選んだときだけ起きるので、差額に含める。' }]);
+
+    item('現金支出費用の節約（税引後）', Math.round(c.saving * (1 - c.t)), 't=1〜' + Y, [
+      { step: '税引後', q: '新設備にすると現金支出費用が年 ' + n(c.saving) + ' 減る。差額表に載せる金額は。',
+        opts: [
+          { t: '税引後の ' + n(c.saving * (1 - c.t)) + '（費用が減れば利益が増え、税金も増えるため）', ok: true },
+          { t: '税引前の ' + n(c.saving) + ' をそのまま' },
+          { t: n(c.saving) + ' × ' + c.tax + '% ＝ ' + n(c.saving * c.t) },
+          { t: '減価償却費と相殺して計上しない' }],
+        why: '費用が ' + n(c.saving) + ' 減れば課税所得が同額増え、税金が ' + n(c.saving * c.t) + ' 増える。手元に残るのは ' + n(c.saving * (1 - c.t)) + '。節約額をそのまま足すのが最頻出のミス。' }]);
+
+    item('タックスシールドの増加分', Math.round(c.depDiff * c.t), 't=1〜' + Y, [
+      { step: '1／2　考え方', q: '減価償却費は旧設備 ' + n(c.oldDep) + ' から新設備 ' + n(c.newDep) + ' に増える。差額表に載せるのは。',
+        opts: [
+          { t: '増加分 ' + n(c.depDiff) + ' に税率を掛けた節税額', ok: true },
+          { t: '新設備の減価償却費 ' + n(c.newDep) + ' に税率を掛けた節税額' },
+          { t: '減価償却費の増加分 ' + n(c.depDiff) + ' をそのまま' },
+          { t: '減価償却費は現金支出でないので計上しない' }],
+        why: '差額で解いているので、旧設備でも取れていた節税分は両案に共通で消える。差になるのは増えた ' + n(c.depDiff) + ' 分だけ。新設備の全額で計算すると、取替案を過大評価する。' },
+      { step: '2／2　金額', q: 'その節税額は。',
+        opts: [
+          { t: n(c.depDiff) + ' × ' + c.tax + '% ＝ ' + n(c.depDiff * c.t), ok: true },
+          { t: n(c.depDiff) + ' × (1−' + c.tax + '%) ＝ ' + n(c.depDiff * (1 - c.t)) },
+          { t: n(c.depDiff) + ' をそのまま' },
+          { t: n(c.newDep) + ' × ' + c.tax + '% ＝ ' + n(c.newDep * c.t) }],
+        why: '現金は動かないのに課税所得だけ減るので、減った税額そのものがキャッシュの増加になる。これがタックスシールド。' }]);
+
+    item('設備処分額の差（税引後）', c.lastOnce, 't=' + Y, [
+      { step: '差で考える', q: Y + '年後、新設備は ' + n(c.newSalv) + '、旧設備を使い続けた場合は ' + n(c.oldSalv) + ' で売れる（いずれも簿価0）。差額表に載せるのは。',
+        opts: [
+          { t: '両者の差 ' + n(c.newSalv - c.oldSalv) + ' の税引後 ' + n(c.lastOnce), ok: true },
+          { t: '新設備の売却額 ' + n(c.newSalv) + ' の税引後だけ' },
+          { t: '新設備の売却額 ' + n(c.newSalv) + ' をそのまま' },
+          { t: '簿価が0なので計上しない' }],
+        why: '現状維持でも ' + n(c.oldSalv) + ' は手に入るので、その分は差にならない。簿価0なら売却額の全額が売却益になり課税されるため、税引後にそろえる。' }]);
+  } else {
+    item('購入支出を避けられる', c.buyCost, 't=0', [
+      { step: '符号', q: 'リース案を選べば購入価額 ' + n(c.buyCost) + ' の支出がなくなる。差額表（リース案 − 購入案）にどう置くか。',
+        opts: [
+          { t: 't=0 に ＋（購入案でだけ出ていく支出を避けられる）', ok: true },
+          { t: 't=0 に −（リース案でも設備を使うため）' },
+          { t: 't=1〜' + Y + ' に分割して ＋' },
+          { t: '両案で共通なので計上しない' }],
+        why: 'リース案を基準に「購入案と比べて何が違うか」を並べる。購入案でだけ出ていく支出は、リース案を選べば避けられるので＋。差額表は必ず「どちらを基準にするか」を最初に決めてから書き始める。' }]);
+
+    item('リース料（税引後）', -Math.round(c.lease * (1 - c.t)), 't=1〜' + Y, [
+      { step: '税引後', q: '年間リース料 ' + n(c.lease) + ' はどう計上するか。',
+        opts: [
+          { t: '税引後の −' + n(c.lease * (1 - c.t)) + '（全額が損金になるため）', ok: true },
+          { t: '税引前の −' + n(c.lease) + ' をそのまま' },
+          { t: '−' + n(c.lease * c.t) + '（税額分だけ）' },
+          { t: '減価償却費と同じく非現金なので計上しない' }],
+        why: 'リース料は全額が損金になるので、実質負担は ' + n(c.lease) + ' ×(1−' + c.tax + '%) ＝ ' + n(c.lease * (1 - c.t)) + '。リースの利点は「損金算入が早いこと」と「初期支出が要らないこと」で、この差額表はそれを数字にしている。' }]);
+
+    item('減価償却のタックスシールドを失う', -Math.round(c.buyDep * c.t), 't=1〜' + Y, [
+      { step: '向き', q: 'リースなら資産計上しないので減価償却できない。年 ' + n(c.buyDep) + ' の減価償却による節税をどう扱うか。',
+        opts: [
+          { t: '−' + n(c.buyDep * c.t) + '（購入案なら得られた節税を失う）', ok: true },
+          { t: '＋' + n(c.buyDep * c.t) + '（リース案でも節税できる）' },
+          { t: '−' + n(c.buyDep) + '（減価償却費そのものを引く）' },
+          { t: '現金支出でないので計上しない' }],
+        why: '購入案なら毎年 ' + n(c.buyDep * c.t) + ' の節税があった。リースを選ぶとそれがなくなるので、差額表では−。「失う効果」も差額として拾うのが、この表の書き方。' }]);
+
+    item('保守料を負担しなくてよい', Math.round(c.maint * (1 - c.t)), 't=1〜' + Y, [
+      { step: '符号', q: '購入案では年 ' + n(c.maint) + ' の保守料がかかるが、リース料には保守が含まれている。どう扱うか。',
+        opts: [
+          { t: '税引後の ＋' + n(c.maint * (1 - c.t)) + '（リースなら払わずに済む）', ok: true },
+          { t: '税引後の −' + n(c.maint * (1 - c.t)) },
+          { t: '両案とも設備を使うので計上しない' },
+          { t: 't=0 にまとめて ＋' + n(c.maint * Y) }],
+        why: 'リース案を選ぶことで避けられる支出なので＋。リース料が割高に見えても、保守やメンテの負担がリース側に含まれていれば実質の差は縮む。契約に何が含まれるかを与件文で必ず確認する。' }]);
+
+    item('売却収入を得られない', c.lastOnce, 't=' + Y, [
+      { step: '向き', q: '購入案なら ' + Y + '年後に設備を ' + n(c.salv) + ' で売れる（簿価0）。リース案では返却するだけ。どう扱うか。',
+        opts: [
+          { t: '−' + n(Math.abs(c.lastOnce)) + '（購入案なら得られた税引後収入を失う）', ok: true },
+          { t: '＋' + n(Math.abs(c.lastOnce)) + '（返却により処分費が不要）' },
+          { t: '−' + n(c.salv) + '（売却額をそのまま）' },
+          { t: 'リース案には関係ないので計上しない' }],
+        why: '簿価0の資産が売れれば全額が売却益で課税されるので、手取りは ' + n(c.salv) + ' ×(1−' + c.tax + '%) ＝ ' + n(Math.abs(c.lastOnce)) + '。リースを選ぶとこれを失うので−。残存価値が大きい資産ほど購入が有利に傾く。' }]);
+  }
+
+  s.push({
+    name: 'まとめて割り引く', tag: '割引', accent: P, discount: true,
+    qs: [
+      { step: '1／2　係数の使い分け',
+        q: '毎年同額の差額CF ' + drillSigned(c.annual, 0) + ' と、t=' + Y + ' だけの差額CF ' + drillSigned(c.lastOnce, 0) + ' がある。それぞれに掛ける係数は。',
+        opts: [
+          { t: '毎年分は年金現価係数 ' + f3(c.annF) + '、' + Y + '年目だけの分は現価係数 ' + f3(c.pvF), ok: true },
+          { t: 'どちらも年金現価係数 ' + f3(c.annF) },
+          { t: 'どちらも現価係数 ' + f3(c.pvF) },
+          { t: '毎年分は現価係数 ' + f3(c.pvF) + '、' + Y + '年目だけの分は年金現価係数 ' + f3(c.annF) }],
+        why: '年金現価係数は「同額が続く」ときの道具、現価係数は「1回だけ」のときの道具。1回きりのCFに年金現価係数を掛けると ' + Y + ' 年分もらったことになり、大幅な過大評価になる。' },
+      { step: '2／2　判定',
+        q: '合計して NPV ＝ ' + drillSigned(c.npv) + '。どう判断するか。',
+        opts: [
+          { t: c.mode === 'renew' ? '新設備に取り替える' : 'リースを選ぶ', ok: c.npv > 0 },
+          { t: c.mode === 'renew' ? '旧設備を使い続ける' : '購入を選ぶ',   ok: c.npv <= 0 },
+          { t: '回収期間法でも確かめないと判断できない' },
+          { t: '初期投資が小さいほうを選ぶ' }],
+        why: (c.npv > 0
+          ? '差額のNPVがプラス＝基準にした案より有利。'
+          : '差額のNPVがマイナス＝基準にした案のほうが有利。')
+          + '差額で解いているので、この符号がそのまま結論になる。どちらを基準に差額を取ったかを最後にもう一度確認すること。' }],
+  });
+
+  return { steps: s, info: c };
+}
+
+function ReplaceDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish} onExit={onExit}
+      meta={{
+        key: 'replace', icon: '🔄', title: '取替投資ドリル', accent: C.green,
+        lead: '2案を別々に計算せず、差額だけを並べてNPVを出します。共通するものは最初から消え、「増える節税」「失う売却収入」といった差だけが残ります。金額・割引率・税率は毎回変わります。',
+      }}
+      modes={[
+        { id: 'renew', icon: '🔧', title: '設備の取替',     desc: '旧設備を使い続ける案と新設備案の差額。減価償却の増加分だけがタックスシールドの差になる。7項目10問。', xp: 90 },
+        { id: 'lease', icon: '📄', title: 'リース vs 購入', desc: 'リース料の損金算入と、減価償却・売却収入を失うこととの差引き。7項目8問。', xp: 90 },
+      ]}
+      build={(m) => {
+        const c = buildRepCase(m);
+        return { ...buildRepSteps(c), ledger: { rows: [], discount: false } };
+      }}
+      applyStep={(ledger, step) => ({
+        rows: step.row ? [...ledger.rows, step.row] : ledger.rows,
+        discount: ledger.discount || !!step.discount,
+      })}
+      headerNote={(info) => (<>単位：万円<br />割引率 {info.rate}%・税率 {info.tax}%</>)}
+      hint={() => '2案で差が出るか、税引後でいくらか、いつ発生するかで考えてみてください。'}
+      nextLabel={(step) => step.row ? '差額表に記入する' : '判定する'}
+      renderLedger={(ledger, info) => (
+        <>
+          <DrillCard title={info.mode === 'renew' ? '差額CF（取替案 − 現状維持案）' : '差額CF（リース案 − 購入案）'} color={C.green}>
+            <div style={{ padding: '2px 0 6px' }}>
+              {ledger.rows.length === 0 && (
+                <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px' }}>
+                  判断した項目から順に、ここへ並びます。
+                </div>
+              )}
+              {ledger.rows.map(r => (
+                <DrillRow key={r.label} label={r.label} note={r.when}
+                  value={drillSigned(r.amt, 0)}
+                  valueColor={r.amt >= 0 ? C.green : C.red} />
+              ))}
+            </div>
+          </DrillCard>
+          {ledger.discount && (
+            <DrillCard title="まとめて割り引く" color={C.purple} style={{ marginBottom: 16 }}>
+              <div style={{ padding: '2px 0 6px' }}>
+                <DrillRow label="t=0 の差額" note="1.000" value={drillSigned(info.zero, 0)}
+                  valueColor={info.zero >= 0 ? C.green : C.red} />
+                <DrillRow label={'t=1〜' + info.years + ' の差額'} note={'年金現価係数 ' + info.annF.toFixed(3)}
+                  value={drillSigned(info.annual * info.annF)}
+                  valueColor={info.annual >= 0 ? C.green : C.red} />
+                <DrillRow label={'t=' + info.years + ' の差額'} note={'現価係数 ' + info.pvF.toFixed(3)}
+                  value={drillSigned(info.lastOnce * info.pvF)}
+                  valueColor={info.lastOnce >= 0 ? C.green : C.red} />
+                <DrillRow label="NPV" value={drillSigned(info.npv)} bold top
+                  bg={C.purple + '18'} color={C.purple}
+                  valueColor={info.npv >= 0 ? C.green : C.red} />
+              </div>
+            </DrillCard>
+          )}
+        </>
+      )}
+      renderResult={(ledger, info, missed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>差額のNPV</div>
+          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.green }}>
+            {drillSigned(info.npv)}
+          </div>
+          <div style={{ fontSize: 14, color: info.npv > 0 ? C.green : C.red, fontWeight: 700, marginTop: 6 }}>
+            → {info.mode === 'renew'
+              ? (info.npv > 0 ? '新設備に取り替える' : '旧設備を使い続ける')
+              : (info.npv > 0 ? 'リースを選ぶ' : '購入を選ぶ')}
+          </div>
+        </div>
+      )}
+    />
+  );
+}
+
+// ============================================================
+// 資本コストドリル（CAPM → WACC → 企業価値）
+// ============================================================
+
+function buildWaccCase() {
+  const c = {
+    rf:    drillRnd(5, 20, 1) / 10,          // 安全利子率 0.5〜2.0%
+    rm:    0,
+    beta:  drillRnd(8, 18, 1) / 10,          // β 0.8〜1.8
+    tax:   drillPick([30, 40]),
+    rd:    drillRnd(15, 40, 1) / 10,         // 負債コスト 1.5〜4.0%
+    debt:  drillRnd(2000, 8000, 500),        // 有利子負債（時価）
+    equity: drillRnd(3000, 12000, 500),      // 株主資本（時価）
+    fcf:   drillRnd(300, 900, 10),           // 毎期一定のFCF
+  };
+  c.rm      = c.rf + drillRnd(40, 70, 5) / 10;    // 市場全体の期待収益率
+  c.premium = Math.round((c.rm - c.rf) * 10) / 10; // 市場リスクプレミアム
+  c.re      = Math.round((c.rf + c.beta * c.premium) * 100) / 100;
+  c.rdAfter = Math.round(c.rd * (1 - c.tax / 100) * 100) / 100;
+  c.total   = c.debt + c.equity;
+  c.wE      = c.equity / c.total;
+  c.wD      = c.debt / c.total;
+  c.wacc    = Math.round((c.wE * c.re + c.wD * c.rdAfter) * 100) / 100;
+  c.value   = c.fcf / (c.wacc / 100);
+  return c;
+}
+
+function buildWaccSteps(c) {
+  const s = drillSteps();
+  const p1 = x => drillNum(x, 1) + '%';
+  const p2 = x => drillNum(x, 2) + '%';
+  const n = drillInt;
+  const A = C.purple;
+
+  s.push({
+    name: '株主資本コスト（CAPM）', tag: '①CAPM', accent: A,
+    row: { label: '株主資本コスト rE', value: p2(c.re), note: 'CAPM' },
+    qs: [
+      { step: '1／3　式', q: 'CAPMで株主資本コストを求める式はどれか。',
+        opts: [
+          { t: '安全利子率 ＋ β ×（市場全体の期待収益率 − 安全利子率）', ok: true },
+          { t: '安全利子率 ＋ β × 市場全体の期待収益率' },
+          { t: '安全利子率 × β ＋ 市場全体の期待収益率' },
+          { t: '（市場全体の期待収益率 − 安全利子率）÷ β' }],
+        why: '安全利子率に「リスクを取った見返り」を上乗せする形。カッコの中（市場全体の期待収益率 − 安全利子率）が市場リスクプレミアムで、今回は ' + p1(c.rm) + ' − ' + p1(c.rf) + ' ＝ ' + p1(c.premium) + '。市場全体の期待収益率にそのままβを掛けるのが典型的な誤り。' },
+      { step: '2／3　βの意味', q: 'β ＝ ' + drillNum(c.beta, 1) + ' は何を表すか。',
+        opts: [
+          { t: '市場全体が1%動くとき、この株式が ' + drillNum(c.beta, 1) + '% 動くという感応度', ok: true },
+          { t: 'この株式の収益率の標準偏差' },
+          { t: 'この会社の負債比率' },
+          { t: 'この株式の過去 ' + drillNum(c.beta, 1) + ' 年の平均収益率' }],
+        why: 'βは市場全体の動きに対する感応度で、分散投資しても消せない systematic risk の大きさを表す。β>1 なら市場より値動きが激しく、投資家はより高いリターンを要求するので資本コストが上がる。' },
+      { step: '3／3　値', q: '安全利子率 ' + p1(c.rf) + '、市場全体の期待収益率 ' + p1(c.rm) + '、β ' + drillNum(c.beta, 1) + '。株主資本コストは。',
+        opts: [
+          { t: p1(c.rf) + ' ＋ ' + drillNum(c.beta, 1) + ' × ' + p1(c.premium) + ' ＝ ' + p2(c.re), ok: true },
+          { t: p1(c.rf) + ' ＋ ' + drillNum(c.beta, 1) + ' × ' + p1(c.rm) + ' ＝ ' + p2(c.rf + c.beta * c.rm) },
+          { t: drillNum(c.beta, 1) + ' × ' + p1(c.premium) + ' ＝ ' + p2(c.beta * c.premium) },
+          { t: p1(c.rm) + ' をそのまま使う' }],
+        why: 'プレミアム ' + p1(c.premium) + ' にβを掛けてから安全利子率に足す。順番を間違えないこと。' }],
+  });
+
+  s.push({
+    name: '負債コスト', tag: '②負債', accent: A,
+    row: { label: '負債コスト rD（税引後）', value: p2(c.rdAfter), note: p1(c.rd) + ' ×(1−' + c.tax + '%)' },
+    qs: [
+      { step: '1／2　税効果', q: '負債コストは ' + p1(c.rd) + '。WACCに使うときはどう直すか。',
+        opts: [
+          { t: '(1 − 税率) を掛けて税引後にする', ok: true },
+          { t: 'そのまま ' + p1(c.rd) + ' を使う' },
+          { t: '税率を掛けて ' + p2(c.rd * c.tax / 100) + ' にする' },
+          { t: '(1 ＋ 税率) を掛ける' }],
+        why: '支払利息は損金になるので、税金が減る分だけ実質的な負担が軽くなる。' + p1(c.rd) + ' ×(1−' + c.tax + '%) ＝ ' + p2(c.rdAfter) + '。株主資本コストには配当が損金にならないためこの調整がない、というのが両者の決定的な違い。' },
+      { step: '2／2　大小', q: '一般に、株主資本コストと負債コストはどちらが高いか。',
+        opts: [
+          { t: '株主資本コスト（株主は返済順位が後で、リスクが大きいため）', ok: true },
+          { t: '負債コスト（利息の支払義務があるため）' },
+          { t: '常に同じ' },
+          { t: '自己資本比率によって逆転する' }],
+        why: '倒産時、債権者が先に回収し株主は残余しか受け取れない。リスクが大きい分だけ高いリターンを要求するので、株主資本コストのほうが高い。だから負債を増やすとWACCは下がる——が、増やしすぎると倒産リスクが上がって両方のコストが跳ね上がる。' }],
+  });
+
+  s.push({
+    name: 'WACC', tag: '③加重平均', accent: C.gold,
+    row: { label: 'WACC', value: p2(c.wacc), note: 'E ' + n(c.equity) + ' / D ' + n(c.debt), bold: true },
+    qs: [
+      { step: '1／2　ウェイト', q: '加重平均の重みには何を使うか。',
+        opts: [
+          { t: '有利子負債と株主資本の時価（市場価値）の構成比', ok: true },
+          { t: '貸借対照表の簿価の構成比' },
+          { t: '売上高に占める構成比' },
+          { t: '負債と資本を1対1で等分する' }],
+        why: '資本コストは「これから投資家に払うべき利回り」なので、いま市場がつけている値段＝時価で加重する。試験では時価が与えられなければ簿価を使うが、どちらを使ったかは明示する。' },
+      { step: '2／2　式', q: 'WACCを求める式はどれか。',
+        opts: [
+          { t: 'E/(D+E) × rE ＋ D/(D+E) × rD ×(1−税率)', ok: true },
+          { t: 'E/(D+E) × rE ×(1−税率) ＋ D/(D+E) × rD' },
+          { t: '(rE ＋ rD)÷2' },
+          { t: 'E/(D+E) × rE ＋ D/(D+E) × rD' }],
+        why: '税効果がかかるのは負債側だけ。' + drillNum(c.wE * 100, 1) + '% × ' + p2(c.re) + ' ＋ ' + drillNum(c.wD * 100, 1) + '% × ' + p2(c.rdAfter) + ' ＝ ' + p2(c.wacc) + '。株主資本コストにも(1−税率)を掛けてしまう誤りが多い。' }],
+  });
+
+  s.push({
+    name: '企業価値', tag: '④DCF', accent: C.purple,
+    row: { label: '企業価値', value: n(c.value), note: 'FCF ' + n(c.fcf) + ' ÷ ' + p2(c.wacc), bold: true },
+    qs: [
+      { step: '1／2　割引率', q: '毎期一定のFCF ' + n(c.fcf) + ' が永久に続くとして企業価値を求める。割引率に使うのは。',
+        opts: [
+          { t: 'WACC ' + p2(c.wacc) + '（債権者と株主の両方に帰属するCFだから）', ok: true },
+          { t: '株主資本コスト ' + p2(c.re) },
+          { t: '負債コスト ' + p2(c.rdAfter) },
+          { t: '安全利子率 ' + p1(c.rf) }],
+        why: 'FCFは利息を払う前の、事業が生み出すキャッシュ全体。債権者と株主の両方に配られるものなので、両方の要求利回りを混ぜたWACCで割り引く。株主に帰属する配当や株主資本価値を求めるときだけ、株主資本コストを使う。' },
+      { step: '2／2　式', q: '永続する一定CFの現在価値の求め方は。',
+        opts: [
+          { t: 'CF ÷ 割引率', ok: true },
+          { t: 'CF × 割引率' },
+          { t: 'CF ÷ (1 ＋ 割引率)' },
+          { t: 'CF × 年金現価係数（5年）' }],
+        why: n(c.fcf) + ' ÷ ' + drillNum(c.wacc / 100, 4) + ' ＝ ' + n(c.value) + '。毎期 g% で成長するなら CF ÷(割引率 − g) となり、分母が小さくなる分だけ価値が大きくなる。割引率 ≤ g だと計算が成り立たないので注意。' }],
+  });
+
+  return { steps: s, info: c };
+}
+
+function WaccDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish} onExit={onExit}
+      meta={{
+        key: 'wacc', icon: '🏦', title: '資本コストドリル', accent: C.purple,
+        lead: 'CAPMで株主資本コストを出し、負債コストに税効果をかけ、時価で加重してWACCへ。最後にDCFで企業価値まで積み上げます。数値は毎回変わります。',
+      }}
+      modes={[{ id: 'wacc', icon: '🧮', title: 'CAPM → WACC → 企業価値', desc: '市場リスクプレミアム・βの意味・負債の税効果・加重の取り方まで。4項目9問。', xp: 90 }]}
+      build={() => {
+        const c = buildWaccCase();
+        return { ...buildWaccSteps(c), ledger: { rows: [] } };
+      }}
+      applyStep={(ledger, step) => ({ rows: step.row ? [...ledger.rows, step.row] : ledger.rows })}
+      headerNote={(info) => (<>単位：百万円<br />税率 {info.tax}%</>)}
+      hint={() => '誰に払うコストなのか、損金になるのかで考えてみてください。'}
+      nextLabel={() => '積み上げ表に記入する'}
+      renderLedger={(ledger, info) => (
+        <>
+          <DrillCard title="与えられた条件" color={C.muted}>
+            <div style={{ padding: '2px 0 6px' }}>
+              <DrillRow label="安全利子率" value={drillNum(info.rf, 1) + '%'} />
+              <DrillRow label="市場全体の期待収益率" value={drillNum(info.rm, 1) + '%'} />
+              <DrillRow label="β（ベータ）" value={drillNum(info.beta, 1)} />
+              <DrillRow label="負債コスト（税引前）" value={drillNum(info.rd, 1) + '%'} />
+              <DrillRow label="有利子負債（時価）" value={drillInt(info.debt)} />
+              <DrillRow label="株主資本（時価）" value={drillInt(info.equity)} />
+              <DrillRow label="毎期のFCF" value={drillInt(info.fcf)} />
+            </div>
+          </DrillCard>
+          <DrillCard title="積み上げ" color={C.purple} style={{ marginBottom: 16 }}>
+            <div style={{ padding: '2px 0 6px' }}>
+              {ledger.rows.length === 0 && (
+                <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px' }}>
+                  求めたものから順に、ここへ積み上がります。
+                </div>
+              )}
+              {ledger.rows.map(r => (
+                <DrillRow key={r.label} label={r.label} note={r.note} value={r.value}
+                  bold={r.bold} valueColor={r.bold ? C.gold : C.text} />
+              ))}
+            </div>
+          </DrillCard>
+        </>
+      )}
+      renderResult={(ledger, info, missed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>WACC</div>
+          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.purple }}>
+            {drillNum(info.wacc, 2)}%
+          </div>
+          <div style={{ fontSize: 13, color: C.text, marginTop: 6 }}>
+            企業価値 {drillInt(info.value)}（rE {drillNum(info.re, 2)}% ／ rD税引後 {drillNum(info.rdAfter, 2)}%）
+          </div>
+        </div>
+      )}
+    />
+  );
+}
+
+// ============================================================
+// リスク評価ドリル（期待値・標準偏差・デシジョンツリー）
+// ============================================================
+
+function buildRiskCase(mode) {
+  const c = { mode };
+  if (mode === 'stat') {
+    // 確率は必ず合計1.0。2案の期待値をわざと近づけ、標準偏差で決める場面をつくる
+    const p = drillPick([[0.2, 0.6, 0.2], [0.3, 0.4, 0.3], [0.25, 0.5, 0.25], [0.2, 0.5, 0.3]]);
+    c.probs  = p;
+    c.states = ['好況', '普通', '不況'];
+    const baseA = drillRnd(400, 800, 20);
+    const spreadA = drillRnd(100, 250, 10);
+    c.a = { name: 'A案', vals: [baseA + spreadA, baseA, baseA - spreadA] };
+    const spreadB = spreadA + drillRnd(150, 400, 10);
+    // B案の期待値をA案とほぼ同じにする（不況時の値で調整）
+    const ea = c.a.vals.reduce((s, v, i) => s + v * p[i], 0);
+    const b0 = baseA + spreadB, b1 = baseA + drillRnd(-40, 40, 20);
+    const b2 = (ea - b0 * p[0] - b1 * p[1]) / p[2];
+    c.b = { name: 'B案', vals: [b0, b1, Math.round(b2)] };
+    for (const x of [c.a, c.b]) {
+      x.ev  = x.vals.reduce((s, v, i) => s + v * p[i], 0);
+      x.var = x.vals.reduce((s, v, i) => s + p[i] * Math.pow(v - x.ev, 2), 0);
+      x.sd  = Math.sqrt(x.var);
+      x.cv  = x.sd / x.ev;
+    }
+  } else {
+    // デシジョンツリー：まず市場調査をするか → 結果に応じて投資するか
+    c.pGood = drillPick([0.4, 0.5, 0.6]);
+    c.pBad  = Math.round((1 - c.pGood) * 10) / 10;
+    c.bigWin  = drillRnd(1500, 3000, 100);
+    c.bigLose = -drillRnd(600, 1600, 100);
+    c.smallWin  = drillRnd(400, 900, 50);
+    c.smallLose = -drillRnd(100, 400, 50);
+    c.evBig   = c.bigWin * c.pGood + c.bigLose * c.pBad;
+    c.evSmall = c.smallWin * c.pGood + c.smallLose * c.pBad;
+    c.best    = Math.max(c.evBig, c.evSmall, 0);
+    c.bestName = c.best === 0 ? '投資しない' : (c.evBig >= c.evSmall ? '大規模投資' : '小規模投資');
+  }
+  return c;
+}
+
+function buildRiskSteps(c) {
+  const s = drillSteps();
+  const n = drillInt;
+  const A = C.orange;
+
+  if (c.mode === 'stat') {
+    const sameEv = Math.abs(c.a.ev - c.b.ev) < 1;
+    s.push({
+      name: '期待値', tag: '①期待値', accent: A, show: 'ev',
+      qs: [
+        { step: '1／2　式', q: '各状況の利益と、その生起確率がわかっている。期待値の求め方は。',
+          opts: [
+            { t: '（各状況の利益 × その確率）をすべて足す', ok: true },
+            { t: '各状況の利益を単純平均する' },
+            { t: '最も確率の高い状況の利益を採用する' },
+            { t: '最大の利益と最小の利益の平均をとる' }],
+          why: '確率で重みをつけた平均。単純平均だと、めったに起きない状況を起きやすい状況と同じ重さで扱ってしまう。確率の合計が1.0になっているかは必ず検算する。' },
+        { step: '2／2　結果', q: 'A案 ' + n(c.a.ev) + '、B案 ' + n(c.b.ev) + '。期待値だけで決められるか。',
+          opts: [
+            { t: '決められない。ばらつきの大きさも見る必要がある', ok: true },
+            { t: '決められる。期待値が大きいほうを選べばよい' },
+            { t: '決められる。確率が最も高い状況の利益で比べればよい' },
+            { t: '決められない。期待値は投資判断に使えない指標だから' }],
+          why: sameEv
+            ? '2案の期待値はほぼ同じ。こうなると期待値では優劣がつかず、同じ儲けの見込みならブレの小さいほうを選ぶ、という判断になる。'
+            : '期待値に差はあるが、ばらつきが大きい案は不況時の落ち込みも大きい。期待値とリスクは必ずセットで見る。' }],
+    });
+
+    s.push({
+      name: '分散と標準偏差', tag: '②ばらつき', accent: A, show: 'sd',
+      qs: [
+        { step: '1／2　式', q: '分散の求め方は。',
+          opts: [
+            { t: '（各状況の利益 − 期待値）の2乗に確率を掛けて合計する', ok: true },
+            { t: '（各状況の利益 − 期待値）に確率を掛けて合計する' },
+            { t: '（各状況の利益 − 期待値）の絶対値を単純平均する' },
+            { t: '最大値と最小値の差' }],
+          why: '2乗しないと、プラスの乖離とマイナスの乖離が打ち消し合ってゼロになってしまう。2乗した分だけ単位も2乗になるので、平方根をとって元の単位に戻したものが標準偏差。' },
+        { step: '2／2　判断', q: 'A案の標準偏差 ' + n(c.a.sd) + '、B案 ' + n(c.b.sd) + '。リスク回避的な経営者はどちらを選ぶか。',
+          opts: [
+            { t: (c.a.sd < c.b.sd ? 'A案' : 'B案') + '（標準偏差が小さく、結果のブレが小さい）', ok: true },
+            { t: (c.a.sd < c.b.sd ? 'B案' : 'A案') + '（標準偏差が大きく、上振れの可能性が大きい）' },
+            { t: '標準偏差では判断できない' },
+            { t: '好況時の利益が大きいほう' }],
+          why: '標準偏差は結果の散らばり＝リスクの大きさ。期待値が同程度なら、小さいほうが望ましい。ただしこれは「リスク回避的」を前提にした判断で、上振れを狙う経営者なら逆の選択もありうる。事例IVでは資金繰りに余裕がない企業ほどリスク回避が妥当になる。' }],
+    });
+
+    const cvBetter = c.a.cv < c.b.cv ? c.a : c.b;
+    s.push({
+      name: '変動係数', tag: '③比較', accent: C.gold, show: 'cv',
+      qs: [
+        { step: '1／2　使う場面', q: '期待値が大きく異なる2案を比べたい。標準偏差をそのまま比べてよいか。',
+          opts: [
+            { t: 'よくない。期待値1単位あたりのリスクを見る変動係数を使う', ok: true },
+            { t: 'よい。標準偏差はそのまま比較できる' },
+            { t: 'よくない。分散に戻してから比べる' },
+            { t: 'よくない。期待値の大きいほうを無条件に選ぶ' }],
+          why: '規模が10倍違えばブレも10倍になるのが自然で、標準偏差の絶対値を比べても意味がない。変動係数 ＝ 標準偏差 ÷ 期待値 なら、規模の違いを打ち消して「1単位の儲けにどれだけのブレが伴うか」を比べられる。' },
+        { step: '2／2　結果', q: '変動係数はA案 ' + drillNum(c.a.cv, 3) + '、B案 ' + drillNum(c.b.cv, 3) + '。どちらが効率的か。',
+          opts: [
+            { t: cvBetter.name + '（変動係数が小さい＝同じ儲けあたりのリスクが小さい）', ok: true },
+            { t: (cvBetter === c.a ? c.b : c.a).name + '（変動係数が大きい＝リスクを取れている）' },
+            { t: 'どちらも同じ' },
+            { t: '期待値が大きいほうが常に効率的' }],
+          why: '変動係数は小さいほうが効率的。なお、複数の事業を組み合わせると、値動きの相関が低いほど全体のばらつきは個々の平均より小さくなる（ポートフォリオ効果）。事業多角化の根拠として記述問題で問われる。' }],
+    });
+  } else {
+    s.push({
+      name: '解く向き', tag: '①手順', accent: A,
+      qs: [{ step: '後ろ向き帰納', q: 'デシジョンツリーはどちらから解くか。',
+        opts: [
+          { t: '末端（右）から期待値を計算し、手前（左）へさかのぼる', ok: true },
+          { t: '出発点（左）から順に右へ計算する' },
+          { t: '確率の大きい枝から順に計算する' },
+          { t: '利益の大きい枝から順に計算する' }],
+        why: '手前の意思決定は「その先でどれだけ稼げるか」が決まらないと判断できない。だから末端の期待値を先に確定させ、意思決定点では最大の枝を選んで、その値を手前へ持ち上げていく。これを後ろ向き帰納という。' }],
+    });
+
+    s.push({
+      name: '大規模投資の期待値', tag: '②末端', accent: A, show: 'big',
+      qs: [{ step: '計算', q: '大規模投資は、成功（確率 ' + drillPct(c.pGood * 100, 0) + '）なら ' + n(c.bigWin) + '、失敗なら ' + n(c.bigLose) + '。期待値は。',
+        opts: [
+          { t: n(c.bigWin) + '×' + drillNum(c.pGood, 1) + ' ＋ (' + n(c.bigLose) + ')×' + drillNum(c.pBad, 1) + ' ＝ ' + n(c.evBig), ok: true },
+          { t: n(c.bigWin) + '×' + drillNum(c.pGood, 1) + ' ＝ ' + n(c.bigWin * c.pGood) + '（損失は考えない）' },
+          { t: '(' + n(c.bigWin) + ' ＋ ' + n(c.bigLose) + ') ÷ 2 ＝ ' + n((c.bigWin + c.bigLose) / 2) },
+          { t: n(c.bigWin) + '（確率が高いほうの値をとる）' }],
+        why: 'マイナスの結果も必ず確率を掛けて足し込む。損失の枝を落として計算するのは、期待値を過大評価する典型的なミス。' }],
+    });
+
+    s.push({
+      name: '小規模投資の期待値', tag: '②末端', accent: A, show: 'small',
+      qs: [{ step: '計算', q: '小規模投資は成功 ' + n(c.smallWin) + '、失敗 ' + n(c.smallLose) + '。確率は大規模と同じ。期待値は。',
+        opts: [
+          { t: n(c.evSmall) + '（同じ式をあてはめる）', ok: true },
+          { t: n(c.evBig) + '（投資規模が違っても期待値は同じ）' },
+          { t: n(c.smallWin) + '（成功時の値をとる）' },
+          { t: n(c.smallWin + c.smallLose) + '（成功と失敗を足す）' }],
+        why: '規模が変われば結果も変わるが、確率が同じなら式の形は同じ。大規模と小規模では、期待値の大きさとブレの大きさの両方が変わる点に注目する。' }],
+    });
+
+    s.push({
+      name: '意思決定点で選ぶ', tag: '③選択', accent: C.gold, show: 'pick',
+      qs: [
+        { step: '1／2　選択', q: '大規模 ' + n(c.evBig) + '、小規模 ' + n(c.evSmall) + '、投資しない 0。意思決定点でどれを選ぶか。',
+          opts: [
+            { t: c.bestName + '（期待値が最大）', ok: true },
+            { t: '期待値が最小のもの' },
+            { t: '確率が最も高い結果をもつもの' },
+            { t: '3つの期待値を平均したもの' }],
+          why: '意思決定点（□）では最大の枝を選び、その値を手前へ持ち上げる。「投資しない」という枝を選択肢から落とさないこと。どの案も期待値がマイナスなら、何もしないのが最善という結論になりうる。' },
+        { step: '2／2　枝の区別', q: 'デシジョンツリーの□（意思決定点）と○（不確実性の分岐）の違いは。',
+          opts: [
+            { t: '□は自分で選べる分岐、○は確率に委ねられる分岐', ok: true },
+            { t: '□は利益が出る分岐、○は損失が出る分岐' },
+            { t: '□は1年目、○は2年目の分岐' },
+            { t: '□は投資額、○は回収額を表す' }],
+          why: '□では最大値を選ぶ（選択できるから）、○では期待値を計算する（選べないから）。この使い分けが後ろ向き帰納の全体で、計算そのものは足し算と掛け算しかない。' }],
+    });
+  }
+  return { steps: s, info: c };
+}
+
+function RiskDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish} onExit={onExit}
+      meta={{
+        key: 'risk', icon: '🎲', title: 'リスク評価ドリル', accent: C.orange,
+        lead: '期待値だけでは決められない場面を、標準偏差と変動係数で詰めます。デシジョンツリーは末端から手前へさかのぼる手順そのものを確認します。数値は毎回変わります。',
+      }}
+      modes={[
+        { id: 'stat', icon: '📐', title: '期待値と標準偏差', desc: '期待値・分散・標準偏差・変動係数。規模が違う案をどう比べるか。3項目6問。', xp: 90 },
+        { id: 'tree', icon: '🌳', title: 'デシジョンツリー', desc: '後ろ向き帰納で末端から解く。□と○の使い分け。4項目5問。', xp: 90 },
+      ]}
+      build={(m) => {
+        const c = buildRiskCase(m);
+        return { ...buildRiskSteps(c), ledger: { show: [] } };
+      }}
+      applyStep={(ledger, step) => ({ show: step.show ? [...ledger.show, step.show] : ledger.show })}
+      headerNote={() => '単位：万円'}
+      hint={(step) => step.tag === '①手順' || step.tag === '②末端' || step.tag === '③選択'
+        ? '選べる分岐か、確率に委ねられる分岐かで考えてみてください。'
+        : '確率で重みをつけているか、規模の違いを打ち消しているかで考えてみてください。'}
+      nextLabel={() => '表に反映する'}
+      renderLedger={(ledger, info) => info.mode === 'stat'
+        ? <RiskStatLedger ledger={ledger} info={info} />
+        : <RiskTreeLedger ledger={ledger} info={info} />}
+      renderResult={(ledger, info, missed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          {info.mode === 'stat' ? (
+            <>
+              <div style={{ fontSize: 13, color: C.muted }}>リスク回避的な選択</div>
+              <div style={{ fontSize: 30, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.orange }}>
+                {info.a.cv < info.b.cv ? info.a.name : info.b.name}
+              </div>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 6, lineHeight: 1.7 }}>
+                A案 期待値 {drillInt(info.a.ev)}／σ {drillInt(info.a.sd)}／CV {drillNum(info.a.cv, 3)}<br />
+                B案 期待値 {drillInt(info.b.ev)}／σ {drillInt(info.b.sd)}／CV {drillNum(info.b.cv, 3)}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, color: C.muted }}>意思決定点の選択</div>
+              <div style={{ fontSize: 30, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.orange }}>
+                {info.bestName}
+              </div>
+              <div style={{ fontSize: 13, color: C.text, marginTop: 6 }}>期待値 {drillInt(info.best)}</div>
+            </>
+          )}
+        </div>
+      )}
+    />
+  );
+}
+
+function RiskStatLedger({ ledger, info }) {
+  const cols = '1fr 56px 56px';
+  const row = (label, a, b, hi) => (
+    <div key={label} style={{
+      display: 'grid', gridTemplateColumns: cols, gap: 6, padding: '5px 12px', fontSize: 11,
+      background: hi ? C.gold + '14' : 'transparent',
+    }}>
+      <span style={{ color: C.text }}>{label}</span>
+      <span style={{ textAlign: 'right', color: C.text }}>{a}</span>
+      <span style={{ textAlign: 'right', color: C.text }}>{b}</span>
+    </div>
+  );
+  return (
+    <DrillCard title="状況別の利益と確率" color={C.orange} style={{ marginBottom: 16 }}>
+      <div style={{ padding: '0 0 6px' }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: cols, gap: 6, padding: '5px 12px',
+          fontSize: 10, color: C.muted, fontWeight: 700, borderBottom: `1px solid ${C.border}`,
+        }}>
+          <span>状況（確率）</span><span style={{ textAlign: 'right' }}>A案</span><span style={{ textAlign: 'right' }}>B案</span>
+        </div>
+        {info.states.map((st, i) => row(
+          st + '（' + drillPct(info.probs[i] * 100, 0) + '）',
+          drillInt(info.a.vals[i]), drillInt(info.b.vals[i])))}
+        {ledger.show.includes('ev') && row('期待値', drillInt(info.a.ev), drillInt(info.b.ev), true)}
+        {ledger.show.includes('sd') && row('標準偏差 σ', drillInt(info.a.sd), drillInt(info.b.sd), true)}
+        {ledger.show.includes('cv') && row('変動係数 CV', drillNum(info.a.cv, 3), drillNum(info.b.cv, 3), true)}
+      </div>
+    </DrillCard>
+  );
+}
+
+function RiskTreeLedger({ ledger, info }) {
+  const branch = (label, win, lose, ev, shown) => (
+    <div style={{ padding: '6px 12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+        <span style={{ color: C.text }}>□ {label}</span>
+        <span style={{ color: shown ? C.gold : C.border, fontWeight: 700 }}>
+          {shown ? drillInt(ev) : '?'}
+        </span>
+      </div>
+      <div style={{ fontSize: 10, color: C.muted, marginLeft: 14, lineHeight: 1.7 }}>
+        ○ 成功 {drillPct(info.pGood * 100, 0)} → {drillInt(win)}<br />
+        ○ 失敗 {drillPct(info.pBad * 100, 0)} → {drillInt(lose)}
+      </div>
+    </div>
+  );
+  return (
+    <DrillCard title="デシジョンツリー" color={C.orange} style={{ marginBottom: 16 }}>
+      <div style={{ padding: '2px 0 6px' }}>
+        {branch('大規模投資', info.bigWin, info.bigLose, info.evBig, ledger.show.includes('big'))}
+        {branch('小規模投資', info.smallWin, info.smallLose, info.evSmall, ledger.show.includes('small'))}
+        <div style={{ padding: '6px 12px', fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ color: C.text }}>□ 投資しない</span>
+          <span style={{ color: C.gold, fontWeight: 700 }}>0</span>
+        </div>
+        {ledger.show.includes('pick') && (
+          <DrillRow label="意思決定点の選択" value={info.bestName + '　' + drillInt(info.best)}
+            bold top bg={C.gold + '18'} valueColor={C.gold} />
+        )}
+      </div>
+    </DrillCard>
+  );
+}
+
+// ============================================================
+// 原価・在庫ドリル（EOQ／標準原価差異／全部原価 vs 直接原価）
+// ============================================================
+
+function buildCostCase(mode) {
+  const c = { mode };
+  if (mode === 'eoq') {
+    // EOQ・発注回数・保管費を先に決め、そこから発注費を逆算する。
+    // こうすると EOQ が公式どおり割り切れ、発注費と保管費もきっちり一致する。
+    for (;;) {
+      c.eoq   = drillRnd(100, 500, 50);
+      c.hold  = drillRnd(1, 10, 1) * 100;
+      c.times = drillPick([4, 5, 6, 8, 10]);
+      c.order = c.eoq * c.hold / (2 * c.times);
+      if (Number.isInteger(c.order) && c.order >= 500 && c.order <= 20000) break;
+    }
+    c.demand = c.times * c.eoq;
+    c.orderCost = c.times * c.order;
+    c.holdCost  = c.eoq / 2 * c.hold;
+    c.totalCost = c.orderCost + c.holdCost;
+  } else if (mode === 'variance') {
+    c.stdPrice = drillRnd(400, 900, 10);               // 標準単価
+    c.actPrice = c.stdPrice + drillRnd(-80, 80, 10);
+    c.stdPerUnit = drillRnd(2, 6, 1);                  // 製品1個あたり標準消費量
+    c.output   = drillRnd(800, 2000, 100);             // 実際生産量
+    c.stdQty   = c.stdPerUnit * c.output;              // 標準消費量（実際生産量に対する）
+    c.actQty   = c.stdQty + drillRnd(-300, 300, 50);
+    c.priceVar = (c.stdPrice - c.actPrice) * c.actQty; // 価格差異
+    c.qtyVar   = (c.stdQty - c.actQty) * c.stdPrice;   // 数量差異
+    c.totalVar = c.priceVar + c.qtyVar;
+    c.stdCost  = c.stdPrice * c.stdQty;
+    c.actCost  = c.actPrice * c.actQty;
+  } else {
+    c.produced = drillRnd(1000, 2000, 100);
+    c.sold     = c.produced - drillRnd(100, 500, 50);  // 生産 > 販売（在庫が増える）
+    c.beginInv = drillRnd(0, 300, 100);
+    c.endInv   = c.beginInv + c.produced - c.sold;
+    // 前期と当期で単位固定費は同じとする（教科書どおりの前提）。
+    // こうすると利益差は必ず（期末在庫−期首在庫）×単位固定費になり、
+    // 「生産＞販売なら全部原価計算のほうが利益が大きい」が例外なく成り立つ。
+    c.fixedPer = drillRnd(400, 900, 50);
+    c.beginPer = c.fixedPer;
+    c.fixedOh  = c.fixedPer * c.produced;              // 固定製造間接費
+    c.diff     = c.endInv * c.fixedPer - c.beginInv * c.beginPer;
+  }
+  return c;
+}
+
+function buildCostSteps(c) {
+  const s = drillSteps();
+  const n = drillInt;
+  const A = C.green;
+
+  if (c.mode === 'eoq') {
+    s.push({
+      name: 'トレードオフの構造', tag: '①考え方', accent: A, show: 'idea',
+      qs: [{ step: '2つの費用', q: '1回の発注量を増やすと、年間の費用はどう動くか。',
+        opts: [
+          { t: '発注回数が減って発注費は下がるが、平均在庫が増えて保管費は上がる', ok: true },
+          { t: '発注費も保管費も下がる' },
+          { t: '発注費は上がり、保管費は下がる' },
+          { t: 'どちらも変わらない' }],
+        why: 'まとめ買いすれば発注の手間は減るが、在庫を抱える期間が延びて保管費がかさむ。この2つの合計が最小になる発注量が経済的発注量（EOQ）で、そこでは発注費と保管費がちょうど等しくなる。' }],
+    });
+
+    s.push({
+      name: 'EOQの公式', tag: '②公式', accent: A, show: 'eoq',
+      qs: [
+        { step: '1／2　式', q: '経済的発注量（EOQ）を求める式は。',
+          opts: [
+            { t: '√( 2 × 年間需要量 × 1回あたり発注費 ÷ 年間1個あたり保管費 )', ok: true },
+            { t: '√( 2 × 年間需要量 × 年間1個あたり保管費 ÷ 1回あたり発注費 )' },
+            { t: '2 × 年間需要量 × 1回あたり発注費 ÷ 年間1個あたり保管費' },
+            { t: '年間需要量 ÷ 1回あたり発注費' }],
+          why: '分子に「たくさん要る・1回の発注が高くつく」要因、分母に「持ち続けると高くつく」要因が入る。発注費が高いほどまとめ買いが有利、保管費が高いほど小口発注が有利、という直感どおりの形になっている。' },
+        { step: '2／2　値', q: '年間需要 ' + n(c.demand) + '個、1回あたり発注費 ' + n(c.order) + '円、年間1個あたり保管費 ' + n(c.hold) + '円。EOQは。',
+          opts: [
+            { t: n(c.eoq) + '個', ok: true },
+            { t: n(Math.round(c.eoq * c.eoq / 100)) + '個（平方根を取り忘れ）' },
+            { t: n(Math.round(c.demand / 12)) + '個（月間需要量）' },
+            { t: n(Math.round(c.demand / c.order)) + '個' }],
+          why: '√(2 × ' + n(c.demand) + ' × ' + n(c.order) + ' ÷ ' + n(c.hold) + ') ＝ ' + n(c.eoq) + '個。平方根の取り忘れが最も多いミス。このとき年間発注回数は ' + drillNum(c.times, 1) + '回になる。' }],
+    });
+
+    s.push({
+      name: '最小総費用', tag: '③検算', accent: C.gold, show: 'cost',
+      qs: [{ step: '確かめ方', q: 'EOQで発注したとき、年間の発注費と保管費はどうなるか。',
+        opts: [
+          { t: '両者が一致する（' + n(c.orderCost) + '円ずつ）', ok: true },
+          { t: '発注費のほうが大きくなる' },
+          { t: '保管費のほうが大きくなる' },
+          { t: '両者の比が2対1になる' }],
+        why: '年間発注費 ＝ 需要 ÷ 発注量 × 発注費、年間保管費 ＝ 発注量 ÷ 2 × 保管費。この2本が交わる点がEOQなので、必ず一致する。計算後の検算に使える便利な性質。合計 ' + n(c.totalCost) + '円 がこの発注方式での最小費用。' }],
+    });
+  } else if (c.mode === 'variance') {
+    const pFav = c.priceVar >= 0, qFav = c.qtyVar >= 0;
+    s.push({
+      name: '差異分析の枠組み', tag: '①考え方', accent: A, show: 'idea',
+      qs: [{ step: '何と何を比べるか', q: '直接材料費の差異分析では、実際発生額を何と比べるか。',
+        opts: [
+          { t: '実際生産量に対する標準原価', ok: true },
+          { t: '当初予算に組んだ標準原価' },
+          { t: '前年同期の実際原価' },
+          { t: '同業他社の平均原価' }],
+        why: '生産量が計画とずれたのは製造現場の責任ではないので、まず実際に作った量に合わせて標準を組み直す。この差し替えを忘れると、生産量の増減がそのまま差異に紛れ込んでしまう。' }],
+    });
+
+    s.push({
+      name: '価格差異', tag: '②分解', accent: A, show: 'price',
+      qs: [
+        { step: '1／2　式', q: '価格差異を求める式は。',
+          opts: [
+            { t: '（標準単価 − 実際単価）× 実際消費量', ok: true },
+            { t: '（標準単価 − 実際単価）× 標準消費量' },
+            { t: '（標準消費量 − 実際消費量）× 実際単価' },
+            { t: '（標準単価 × 標準消費量）−（実際単価 × 実際消費量）' }],
+          why: '価格差異には実際消費量、数量差異には標準単価を掛ける、という組み合わせが約束ごと。両方に実際値を使うと、価格と数量が重なった部分を二重に数えてしまう。' },
+        { step: '2／2　有利か不利か',
+          q: '標準単価 ' + n(c.stdPrice) + '円、実際単価 ' + n(c.actPrice) + '円、実際消費量 ' + n(c.actQty) + '。価格差異は。',
+          opts: [
+            { t: drillInt(Math.abs(c.priceVar)) + '円の' + (pFav ? '有利差異（標準より安く買えた）' : '不利差異（標準より高く買った）'), ok: true },
+            { t: drillInt(Math.abs(c.priceVar)) + '円の' + (pFav ? '不利差異' : '有利差異') },
+            { t: drillInt(Math.abs((c.stdPrice - c.actPrice) * c.stdQty)) + '円（標準消費量を使う）' },
+            { t: '差異は発生していない' }],
+          why: '（' + n(c.stdPrice) + ' − ' + n(c.actPrice) + '）× ' + n(c.actQty) + ' ＝ ' + drillSigned(c.priceVar, 0) + '。プラスなら有利（原価が標準より少なくて済んだ）。価格差異は購買部門の責任、というのが責任会計の基本的な割り振り。' }],
+    });
+
+    s.push({
+      name: '数量差異', tag: '②分解', accent: A, show: 'qty',
+      qs: [{ step: '計算と責任',
+        q: '標準消費量 ' + n(c.stdQty) + '、実際消費量 ' + n(c.actQty) + '、標準単価 ' + n(c.stdPrice) + '円。数量差異と、その責任部門は。',
+        opts: [
+          { t: drillInt(Math.abs(c.qtyVar)) + '円の' + (qFav ? '有利' : '不利') + '差異、製造部門の責任', ok: true },
+          { t: drillInt(Math.abs(c.qtyVar)) + '円の' + (qFav ? '不利' : '有利') + '差異、製造部門の責任' },
+          { t: drillInt(Math.abs(c.qtyVar)) + '円の' + (qFav ? '有利' : '不利') + '差異、購買部門の責任' },
+          { t: drillInt(Math.abs((c.stdQty - c.actQty) * c.actPrice)) + '円（実際単価を使う）' }],
+        why: '（' + n(c.stdQty) + ' − ' + n(c.actQty) + '）× ' + n(c.stdPrice) + ' ＝ ' + drillSigned(c.qtyVar, 0) + '。材料の使いすぎ・歩留まりの悪化は製造現場の問題なので製造部門の責任。価格差異と数量差異で責任部門が分かれるからこそ、分解する意味がある。合計差異は ' + drillSigned(c.totalVar, 0) + '。' }],
+    });
+  } else {
+    const bigger = c.diff > 0 ? '全部原価計算' : c.diff < 0 ? '直接原価計算' : 'どちらも同じ';
+    s.push({
+      name: '固定費の扱いの違い', tag: '①考え方', accent: A, show: 'idea',
+      qs: [{ step: '2つの計算方式', q: '全部原価計算と直接原価計算は、何が違うか。',
+        opts: [
+          { t: '固定製造間接費を製品原価に含めるか、期間費用として全額を当期の費用にするか', ok: true },
+          { t: '変動費を製品原価に含めるかどうか' },
+          { t: '販売費を製品原価に含めるかどうか' },
+          { t: '在庫の評価に先入先出法を使うかどうか' }],
+        why: '全部原価計算では固定製造間接費も製品に乗るので、売れ残った分は棚卸資産として次期に繰り越される。直接原価計算では発生した期に全額を費用にする。この一点だけで利益額が変わる。' }],
+    });
+
+    s.push({
+      name: '利益差の向き', tag: '②比較', accent: A, show: 'dir',
+      qs: [{ step: '生産 > 販売のとき',
+        q: '生産量 ' + n(c.produced) + '個に対し販売量は ' + n(c.sold) + '個で、在庫が増えた。利益が大きくなるのはどちらか。',
+        opts: [
+          { t: '全部原価計算（固定費の一部が在庫として次期へ繰り延べられるため）', ok: true },
+          { t: '直接原価計算（固定費を全額当期の費用にするため）' },
+          { t: 'どちらも同じ' },
+          { t: '販売単価によって変わる' }],
+        why: '売れ残った在庫に固定費が乗って資産に化けるので、当期の費用がその分だけ少なくなる。生産＞販売なら全部原価計算のほうが利益が大きく、生産＜販売なら逆になり、生産＝販売なら一致する。作れば作るほど利益が出てしまうのが全部原価計算の弱点で、直接原価計算が経営管理に向くとされる理由。' }],
+    });
+
+    s.push({
+      name: '利益差の金額', tag: '③計算', accent: C.gold, show: 'amt',
+      qs: [{ step: '式',
+        q: '両者の利益の差はどう求めるか。',
+        opts: [
+          { t: '期末在庫に含まれる固定費 − 期首在庫に含まれる固定費', ok: true },
+          { t: '固定製造間接費の総額 ÷ 生産量' },
+          { t: '（生産量 − 販売量）× 販売単価' },
+          { t: '固定製造間接費の総額 × （販売量 ÷ 生産量）' }],
+        why: '差の正体は「在庫に乗ったまま繰り越された固定費の増減」だけ。期末 ' + n(c.endInv) + '個×' + n(c.fixedPer) + '円 − 期首 ' + n(c.beginInv) + '個×' + n(c.beginPer) + '円 ＝ ' + drillSigned(c.diff, 0) + '円。'
+          + (bigger === 'どちらも同じ' ? '今回は差がゼロになる。' : '今回は' + bigger + 'のほうが ' + drillInt(Math.abs(c.diff)) + '円 利益が大きい。') }],
+    });
+  }
+  return { steps: s, info: c };
+}
+
+function CostDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish} onExit={onExit}
+      meta={{
+        key: 'cost', icon: '📦', title: '原価・在庫ドリル', accent: C.green,
+        lead: '発注量のトレードオフ、標準原価の差異分解、固定費の扱いによる利益差。式そのものより「なぜその形か」を押さえます。数値は毎回変わります。',
+      }}
+      modes={[
+        { id: 'eoq',      icon: '🧮', title: '経済的発注量（EOQ）', desc: '発注費と保管費のトレードオフ。EOQでは両者が一致する。3項目4問。', xp: 90 },
+        { id: 'variance', icon: '📏', title: '標準原価の差異分析',   desc: '価格差異と数量差異の分解、有利・不利の向き、責任部門。3項目4問。', xp: 90 },
+        { id: 'costing',  icon: '🗃️', title: '全部原価 vs 直接原価', desc: '固定費を在庫に乗せるかどうかだけで利益が変わる仕組み。3項目3問。', xp: 90 },
+      ]}
+      build={(m) => {
+        const c = buildCostCase(m);
+        return { ...buildCostSteps(c), ledger: { show: [] } };
+      }}
+      applyStep={(ledger, step) => ({ show: step.show ? [...ledger.show, step.show] : ledger.show })}
+      headerNote={() => '単位：円'}
+      hint={() => '何と何がトレードオフか、どちらに実際値を使うか、固定費がどこへ行くかで考えてみてください。'}
+      nextLabel={() => '表に反映する'}
+      renderLedger={(ledger, info) => {
+        const S = ledger.show;
+        if (info.mode === 'eoq') return (
+          <DrillCard title="在庫の条件" color={C.green} style={{ marginBottom: 16 }}>
+            <div style={{ padding: '2px 0 6px' }}>
+              <DrillRow label="年間需要量" value={drillInt(info.demand) + '個'} />
+              <DrillRow label="1回あたり発注費" value={drillInt(info.order)} />
+              <DrillRow label="年間1個あたり保管費" value={drillInt(info.hold)} />
+              {S.includes('eoq') && <DrillRow label="経済的発注量（EOQ）" value={drillInt(info.eoq) + '個'} top bold valueColor={C.gold} />}
+              {S.includes('eoq') && <DrillRow label="年間発注回数" value={drillNum(info.times, 1) + '回'} />}
+              {S.includes('cost') && <>
+                <DrillRow label="年間発注費" value={drillInt(info.orderCost)} top />
+                <DrillRow label="年間保管費" value={drillInt(info.holdCost)} />
+                <DrillRow label="年間合計費用" value={drillInt(info.totalCost)} bold bg={C.gold + '18'} valueColor={C.gold} />
+              </>}
+            </div>
+          </DrillCard>
+        );
+        if (info.mode === 'variance') return (
+          <DrillCard title="直接材料費の実績" color={C.green} style={{ marginBottom: 16 }}>
+            <div style={{ padding: '2px 0 6px' }}>
+              <DrillRow label="実際生産量" value={drillInt(info.output) + '個'} />
+              <DrillRow label="標準単価 / 実際単価" value={drillInt(info.stdPrice) + ' / ' + drillInt(info.actPrice)} />
+              <DrillRow label="標準消費量 / 実際消費量" value={drillInt(info.stdQty) + ' / ' + drillInt(info.actQty)} />
+              <DrillRow label="標準原価 / 実際原価" value={drillInt(info.stdCost) + ' / ' + drillInt(info.actCost)} top />
+              {S.includes('price') && <DrillRow label="価格差異" value={drillSigned(info.priceVar, 0)} bold
+                valueColor={info.priceVar >= 0 ? C.green : C.red} note={info.priceVar >= 0 ? '有利' : '不利'} />}
+              {S.includes('qty') && <DrillRow label="数量差異" value={drillSigned(info.qtyVar, 0)} bold
+                valueColor={info.qtyVar >= 0 ? C.green : C.red} note={info.qtyVar >= 0 ? '有利' : '不利'} />}
+              {S.includes('qty') && <DrillRow label="合計差異" value={drillSigned(info.totalVar, 0)} bold top
+                bg={C.gold + '18'} valueColor={info.totalVar >= 0 ? C.green : C.red} />}
+            </div>
+          </DrillCard>
+        );
+        return (
+          <DrillCard title="生産と在庫" color={C.green} style={{ marginBottom: 16 }}>
+            <div style={{ padding: '2px 0 6px' }}>
+              <DrillRow label="生産量 / 販売量" value={drillInt(info.produced) + ' / ' + drillInt(info.sold) + '個'} />
+              <DrillRow label="期首在庫 / 期末在庫" value={drillInt(info.beginInv) + ' / ' + drillInt(info.endInv) + '個'} />
+              <DrillRow label="固定製造間接費" value={drillInt(info.fixedOh)} />
+              {S.includes('dir') && <DrillRow label="利益が大きいのは" top
+                value={info.diff > 0 ? '全部原価計算' : info.diff < 0 ? '直接原価計算' : '同じ'} bold valueColor={C.gold} />}
+              {S.includes('amt') && <DrillRow label="利益の差" value={drillSigned(info.diff, 0)} bold
+                bg={C.gold + '18'} valueColor={C.gold} />}
+            </div>
+          </DrillCard>
+        );
+      }}
+      renderResult={(ledger, info, missed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          {info.mode === 'eoq' && (<>
+            <div style={{ fontSize: 13, color: C.muted }}>経済的発注量</div>
+            <div style={{ fontSize: 32, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.green }}>
+              {drillInt(info.eoq)}個
+            </div>
+            <div style={{ fontSize: 13, color: C.text, marginTop: 6 }}>年間合計費用 {drillInt(info.totalCost)}円</div>
+          </>)}
+          {info.mode === 'variance' && (<>
+            <div style={{ fontSize: 13, color: C.muted }}>合計差異</div>
+            <div style={{ fontSize: 32, fontWeight: 700, marginTop: 2, color: info.totalVar >= 0 ? C.green : C.red }}>
+              {drillSigned(info.totalVar, 0)}
+            </div>
+            <div style={{ fontSize: 13, color: C.text, marginTop: 6 }}>
+              価格差異 {drillSigned(info.priceVar, 0)}／数量差異 {drillSigned(info.qtyVar, 0)}
+            </div>
+          </>)}
+          {info.mode === 'costing' && (<>
+            <div style={{ fontSize: 13, color: C.muted }}>利益が大きいのは</div>
+            <div style={{ fontSize: 28, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.green }}>
+              {info.diff > 0 ? '全部原価計算' : info.diff < 0 ? '直接原価計算' : 'どちらも同じ'}
+            </div>
+            <div style={{ fontSize: 13, color: C.text, marginTop: 6 }}>差額 {drillInt(Math.abs(info.diff))}円</div>
+          </>)}
+        </div>
+      )}
+    />
+  );
+}
+
+// ============================================================
+// 為替リスクドリル（ヘッジ手段の選択）
+// ============================================================
+
+function buildFxCase() {
+  const exporter = Math.random() < 0.5;
+  const spot = drillRnd(1300, 1600, 5) / 10;              // 直物レート（円/ドル）
+  const c = {
+    exporter,
+    spot,
+    fwd:  Math.round((spot + drillRnd(-25, 25, 5) / 10) * 10) / 10,  // 予約レート
+    amount: drillRnd(20, 120, 10),                        // 建値（万ドル）
+    months: drillPick([3, 6]),
+  };
+  // 決済時に実際になったレート
+  c.actual = Math.round((spot + drillPick([-1, 1]) * drillRnd(30, 90, 5) / 10) * 10) / 10;
+  c.noHedge  = Math.round(c.amount * c.actual * 100) / 100;   // ヘッジなしの円貨額（万円）
+  c.hedged   = Math.round(c.amount * c.fwd * 100) / 100;      // 予約した場合の円貨額
+  c.gain     = Math.round((c.exporter ? c.hedged - c.noHedge : c.noHedge - c.hedged) * 100) / 100;
+  c.riskDir  = exporter ? '円高' : '円安';
+  c.hedgeAct = exporter ? 'ドル売り予約' : 'ドル買い予約';
+  return c;
+}
+
+function buildFxSteps(c) {
+  const s = drillSteps();
+  const r = x => drillNum(x, 1) + '円';
+  const y = x => drillNum(x, 0) + '万円';
+  const A = C.gold;
+  const pos = c.exporter ? '輸出' : '輸入';
+
+  s.push({
+    name: 'どちらに振れると損か', tag: '①リスク', accent: A, show: 'risk',
+    qs: [
+      { step: '1／2　ポジション',
+        q: 'D社は' + pos + '企業で、' + c.months + 'か月後に ' + drillInt(c.amount) + '万ドルを'
+           + (c.exporter ? '受け取る' : '支払う') + '契約を結んだ。不利なのはどちらへの変動か。',
+        opts: [
+          { t: '円高（1ドルあたりの円が少なくなる）', ok: c.exporter },
+          { t: '円安（1ドルあたりの円が多くなる）', ok: !c.exporter },
+          { t: 'どちらに振れても損益は変わらない' },
+          { t: '為替の変動より金利の変動のほうが影響が大きい' }],
+        why: c.exporter
+          ? 'ドルを受け取る立場なので、円に換えたときの手取りが減る円高が不利。1ドル' + r(c.spot) + 'が' + r(c.spot - 5) + 'になれば、' + drillInt(c.amount) + '万ドルの手取りは ' + y(c.amount * 5) + ' 減る。'
+          : 'ドルを支払う立場なので、用意すべき円が増える円安が不利。1ドル' + r(c.spot) + 'が' + r(c.spot + 5) + 'になれば、支払額は ' + y(c.amount * 5) + ' 増える。' },
+      { step: '2／2　ヘッジの目的',
+        q: '為替ヘッジを行う目的として最も適切なのは。',
+        opts: [
+          { t: '円貨額を確定させ、採算と資金繰りの見通しを立てられるようにすること', ok: true },
+          { t: '為替差益を大きくして利益を増やすこと' },
+          { t: '為替相場を予測して投機的な利益を得ること' },
+          { t: '外貨建ての債権債務を会計上なくすこと' }],
+        why: 'ヘッジは儲けるための手段ではなく、ブレを消して事業計画を立てられるようにするための手段。結果的に相場が有利に動けば「ヘッジしなければよかった」ことになるが、それは失敗ではない。この理解が記述問題での評価を分ける。' }],
+  });
+
+  s.push({
+    name: '為替予約', tag: '②手段', accent: A, show: 'fwd',
+    qs: [
+      { step: '1／2　どちらの予約か',
+        q: 'D社が為替予約を使うなら、どちらを予約するか。',
+        opts: [
+          { t: c.hedgeAct, ok: true },
+          { t: c.exporter ? 'ドル買い予約' : 'ドル売り予約' },
+          { t: '円売り予約とドル売り予約の両方' },
+          { t: '予約はせず、決済日に直物で交換する' }],
+        why: c.exporter
+          ? '将来ドルが入ってくるので、そのドルを売る（円に換える）レートをいま決めておく。受け取る通貨を売る予約、と覚える。'
+          : '将来ドルを支払うので、そのドルを買うレートをいま決めておく。支払う通貨を買う予約、と覚える。' },
+      { step: '2／2　結果',
+        q: '予約レート ' + r(c.fwd) + ' で予約した。決済日の直物が ' + r(c.actual) + ' だった場合、予約の効果は。',
+        opts: [
+          { t: (c.gain >= 0 ? '有利に働いた' : '結果的には不利だった') + '（差は ' + y(Math.abs(c.gain)) + '）', ok: true },
+          { t: (c.gain >= 0 ? '結果的には不利だった' : '有利に働いた') + '（差は ' + y(Math.abs(c.gain)) + '）' },
+          { t: '予約しても円貨額は変わらない' },
+          { t: '直物レートが動いた分だけ追加で支払いが生じる' }],
+        why: '予約した場合 ' + y(c.hedged) + '、しなかった場合 ' + y(c.noHedge) + '。'
+          + (c.gain >= 0
+            ? '今回は予約が功を奏したが、逆に振れていれば損に見えたはず。'
+            : '結果だけ見れば予約しないほうが得だったが、契約時点でそれは分からない。')
+          + 'ヘッジの巧拙は事後の損益ではなく、不確実性を消せたかどうかで評価する。' }],
+  });
+
+  s.push({
+    name: '通貨オプション', tag: '②手段', accent: A, show: 'opt',
+    qs: [{ step: '予約との違い',
+      q: '為替予約ではなく通貨オプションを使う利点は。',
+      opts: [
+        { t: '不利な方向はヘッジしつつ、有利に動いたときは権利を放棄して直物で取引できる', ok: true },
+        { t: '予約より確実に円貨額を固定できる' },
+        { t: '費用がかからない' },
+        { t: '決済日を自由に変更できる' }],
+      why: 'オプションは「権利」なので、有利に動けば行使せず市場レートで取引すればよい。その代わりオプション料（プレミアム）という費用が先に出ていく。予約は費用がかからない代わりに、有利に動いても予約レートに縛られる。どちらが良いかは、コストを払ってでも上振れを取りたいかによる。' }],
+  });
+
+  s.push({
+    name: 'マリーとネッティング', tag: '③社内で消す', accent: C.accent, show: 'marry',
+    qs: [
+      { step: '1／2　マリー',
+        q: '同じ通貨の債権と債務を同額もたせて相殺することを何というか。',
+        opts: [
+          { t: 'マリー（同一通貨の受取と支払を組み合わせて為替リスクを相殺する）', ok: true },
+          { t: 'ネッティング（グループ企業間の債権債務を相殺して差額だけ決済する）' },
+          { t: 'リーズ・アンド・ラグズ（決済時期を早めたり遅らせたりする）' },
+          { t: 'ヘッジ会計（会計処理でリスクを消す）' }],
+        why: '輸出でドルを受け取り、輸入でドルを支払うなら、その範囲では為替の影響が打ち消し合う。外部と取引せずにリスクを減らせるので、コストがかからないのが最大の利点。' },
+      { step: '2／2　使い分け',
+        q: '海外子会社との間で債権と債務が双方向に発生している。手数料を抑えるのに有効なのは。',
+        opts: [
+          { t: 'ネッティング（差額だけを送金する）', ok: true },
+          { t: '為替予約を債権・債務それぞれに掛ける' },
+          { t: '通貨オプションを両建てで購入する' },
+          { t: 'すべて円建てに変更するよう子会社に指示する' }],
+        why: '総額で送金し合うと、その都度、為替手数料と送金手数料がかかる。差額だけにすれば回数も金額も減る。リーズ・アンド・ラグズは決済時期を前倒し／先送りして有利なレートを狙う手法で、これは投機的な色彩があるため、ヘッジとは性格が異なる。' }],
+  });
+
+  s.push({
+    name: '根本的な対策', tag: '④体質', accent: C.purple, show: 'base',
+    qs: [{ step: '助言',
+      q: '為替変動の影響を構造的に小さくする対策として最も適切なのは。',
+      opts: [
+        { t: '取引通貨を円建てにする、または海外生産により現地通貨での収支を均衡させる', ok: true },
+        { t: '予約期間をできるだけ長くする' },
+        { t: '為替相場の予測精度を上げる' },
+        { t: '外貨建ての取引量を増やして分散させる' }],
+      why: '予約もオプションも、リスクを一時的に固定するだけで、毎期くり返し費用と手間がかかる。円建て取引への切り替えや、現地生産・現地調達によって収支を同じ通貨でそろえてしまえば、リスクそのものが小さくなる。ただし円建てを相手に飲ませれば価格競争力は落ちるので、そのトレードオフまで書けると助言として強い。' }],
+  });
+
+  return { steps: s, info: c };
+}
+
+function FxDrill({ onFinish, onExit }) {
+  return (
+    <DrillRunner
+      onFinish={onFinish} onExit={onExit}
+      meta={{
+        key: 'fx', icon: '💱', title: '為替リスクドリル', accent: C.gold,
+        lead: 'まず自社がどちらに振れると損をする立場かを確定させ、そのうえで予約・オプション・マリー・ネッティングを使い分けます。輸出入の立場とレートは毎回変わります。',
+      }}
+      modes={[{ id: 'hedge', icon: '🛡️', title: 'ヘッジ手段の選択', desc: 'ポジションの見極めから、予約・オプション・社内での相殺・構造的な対策まで。5項目8問。', xp: 90 }]}
+      build={() => {
+        const c = buildFxCase();
+        return { ...buildFxSteps(c), ledger: { show: [] } };
+      }}
+      applyStep={(ledger, step) => ({ show: step.show ? [...ledger.show, step.show] : ledger.show })}
+      headerNote={(info) => (<>{info.exporter ? '輸出企業' : '輸入企業'}<br />{info.months}か月後決済</>)}
+      hint={() => '自社が外貨を受け取る側か支払う側か、に戻って考えてみてください。'}
+      nextLabel={() => '整理表に記入する'}
+      renderLedger={(ledger, info) => (
+        <>
+          <DrillCard title="取引の条件" color={C.muted}>
+            <div style={{ padding: '2px 0 6px' }}>
+              <DrillRow label="立場" value={info.exporter ? '輸出（ドル受取）' : '輸入（ドル支払）'} />
+              <DrillRow label="金額" value={drillInt(info.amount) + '万ドル'} />
+              <DrillRow label="直物レート" value={drillNum(info.spot, 1) + '円/ドル'} />
+              <DrillRow label="予約レート" value={drillNum(info.fwd, 1) + '円/ドル'} />
+              {ledger.show.includes('fwd') && (
+                <DrillRow label="決済日の直物レート" value={drillNum(info.actual, 1) + '円/ドル'} top />
+              )}
+            </div>
+          </DrillCard>
+          {ledger.show.length > 0 && (
+            <DrillCard title="整理" color={C.gold} style={{ marginBottom: 16 }}>
+              <div style={{ padding: '2px 0 6px' }}>
+                {ledger.show.includes('risk') && (
+                  <DrillRow label="不利な変動方向" value={info.riskDir} valueColor={C.red} />
+                )}
+                {ledger.show.includes('fwd') && <>
+                  <DrillRow label="とるべき予約" value={info.hedgeAct} valueColor={C.accent} />
+                  <DrillRow label="予約した場合の円貨額" value={drillNum(info.hedged, 0) + '万円'} />
+                  <DrillRow label="ヘッジなしの円貨額" value={drillNum(info.noHedge, 0) + '万円'} />
+                  <DrillRow label="予約の効果" value={drillSigned(info.gain, 0) + '万円'} bold
+                    valueColor={info.gain >= 0 ? C.green : C.red} />
+                </>}
+                {ledger.show.includes('opt') && (
+                  <DrillRow label="オプション" value="不利側のみヘッジ" note="プレミアムが必要" top />
+                )}
+                {ledger.show.includes('marry') && (
+                  <DrillRow label="社内での相殺" value="マリー／ネッティング" note="手数料を抑えられる" />
+                )}
+                {ledger.show.includes('base') && (
+                  <DrillRow label="構造的な対策" value="円建て化・現地生産" bold bg={C.purple + '18'} valueColor={C.purple} />
+                )}
+              </div>
+            </DrillCard>
+          )}
+        </>
+      )}
+      renderResult={(ledger, info, missed) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>この立場でとるべきヘッジ</div>
+          <div style={{ fontSize: 28, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.accent }}>
+            {info.hedgeAct}
+          </div>
+          <div style={{ fontSize: 13, color: C.text, marginTop: 6 }}>
+            不利なのは{info.riskDir}／予約で {drillNum(info.hedged, 0)}万円に確定
+          </div>
+        </div>
+      )}
+    />
+  );
+}
+
+// ドリルキー → コンポーネント（一覧の並びは DRILL_LIST が持つ）
+const DRILL_COMPONENTS = {
+  analysis: AnalysisDrill,
+  cvp:      CvpDrill,
+  diff:     DiffDrill,
+  npv:      NpvDrill,
+  replace:  ReplaceDrill,
+  cf:       CFDrill,
+  wacc:     WaccDrill,
+  risk:     RiskDrill,
+  cost:     CostDrill,
+  fx:       FxDrill,
+};
 
 function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillComplete }) {
   const [view, setView]                   = useState('list');
@@ -5420,12 +7754,49 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillCompl
   });
 
   // ---- List view ----
-  if (view === 'drill_cf') {
-    return <CFDrill onFinish={onDrillComplete} onExit={() => setView('list')} />;
+  if (view === 'drills') {
+    return (
+      <div style={{ padding: '16px 16px 80px' }}>
+        <button onClick={() => setView('list')} style={{
+          background: 'none', border: 'none', color: C.accent, cursor: 'pointer',
+          fontSize: 22, padding: 0, marginBottom: 14 }}>←</button>
+        <div style={{ fontSize: 19, fontWeight: 700, color: C.text, marginBottom: 6 }}>🎯 思考フロードリル</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 18, lineHeight: 1.7 }}>
+          計算そのものはドリルが引き受けます。あなたが選ぶのは「どこに置くか」
+          「どの式か」「関連原価か埋没原価か」という判断だけ。数字は毎回変わります。
+        </div>
+        {DRILL_LIST.map(d => {
+          const done = Object.entries(data.drillProgress || {})
+            .filter(([k]) => k.startsWith(d.key + '_'));
+          const attempts = done.reduce((a, [, v]) => a + (v.attempts || 0), 0);
+          const best = done.reduce((a, [, v]) => Math.max(a, v.bestXp || 0), 0);
+          return (
+            <div key={d.key} onClick={() => setView('drill:' + d.key)} style={{
+              background: C.card, border: `1px solid ${attempts ? d.color + '55' : C.border}`,
+              borderRadius: 14, padding: '13px 15px', marginBottom: 10, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 13,
+            }}>
+              <div style={{ fontSize: 25 }}>{d.icon}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{d.title}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.55 }}>{d.desc}</div>
+                {attempts > 0 && (
+                  <div style={{ fontSize: 10, color: d.color, marginTop: 5, fontWeight: 700 }}>
+                    {attempts}回挑戦 · ベスト {best} XP
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 18, color: d.color }}>›</div>
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 
-  if (view === 'drill_npv') {
-    return <NpvDrill onFinish={onDrillComplete} onExit={() => setView('list')} />;
+  if (view.startsWith('drill:')) {
+    const Cmp = DRILL_COMPONENTS[view.slice(6)];
+    if (Cmp) return <Cmp onFinish={onDrillComplete} onExit={() => setView('drills')} />;
   }
 
   if (view === 'list') {
@@ -5650,33 +8021,25 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillCompl
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>ステップ別選択問題</div>
 
             {!isCaseStudy && (
-              <div style={{ marginBottom: 16 }}>
-                {[
-                  { id: 'drill_cf',  icon: '⚡', col: C.accent, title: '間接法CFドリル',
-                    desc: '数字が毎回変わる。符号を判断すると台帳が積み上がります' },
-                  { id: 'drill_npv', icon: '💹', col: C.purple, title: 'NPVドリル',
-                    desc: '試験と同じ順番。CF表を書き、年金現価係数の引き算でまとめて割り引く' },
-                ].map(d => (
-                  <div
-                    key={d.id}
-                    onClick={() => setView(d.id)}
-                    style={{
-                      background: `linear-gradient(135deg, ${d.col}22, ${C.purple}18)`,
-                      border: `1px solid ${d.col}66`, borderRadius: 14,
-                      padding: '14px 16px', marginBottom: 8, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 14,
-                    }}
-                  >
-                    <div style={{ fontSize: 26 }}>{d.icon}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{d.title}</div>
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
-                        {d.desc}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 18, color: d.col }}>›</div>
+              <div
+                onClick={() => setView('drills')}
+                style={{
+                  background: `linear-gradient(135deg, ${C.accent}22, ${C.purple}22)`,
+                  border: `1px solid ${C.accent}66`, borderRadius: 14,
+                  padding: '14px 16px', marginBottom: 16, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 14,
+                }}
+              >
+                <div style={{ fontSize: 26 }}>🎯</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>
+                    思考フロードリル <span style={{ color: C.gold, fontSize: 12 }}>{DRILL_LIST.length}種</span>
                   </div>
-                ))}
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
+                    数字が毎回変わる。手順を1つずつ選んで表を組み立てます
+                  </div>
+                </div>
+                <div style={{ fontSize: 18, color: C.accent }}>›</div>
               </div>
             )}
 
@@ -6148,15 +8511,10 @@ export default function App() {
     }
   }
 
-  function handleDrillComplete({ drill = 'cf', mode, xp, missed }) {
-    const LABELS = {
-      cf_op:      ['⚡', '間接法CFドリル（営業CF）'],
-      cf_full:    ['⚡', '間接法CFドリル（3区分）'],
-      npv_basic:  ['💹', 'NPVドリル（基本）'],
-      npv_full:   ['💹', 'NPVドリル（設備更新）'],
-    };
+  function handleDrillComplete({ drill = 'cf', mode, xp, missed, label }) {
     const key = `${drill}_${mode}`;
-    const [icon, label] = LABELS[key] || ['⚡', 'ドリル'];
+    const icon = DRILL_LIST.find(d => d.key === drill)?.icon || '⚡';
+    const name = label || 'ドリル';
     const prev = data.drillProgress?.[key] || { attempts: 0, bestXp: 0 };
     let d = {
       ...data,
@@ -6166,13 +8524,13 @@ export default function App() {
       },
     };
     const prevLevel = getLevel(data.xp);
-    const hi = buildHistoryItem(icon, label, xp);
+    const hi = buildHistoryItem(icon, name, xp);
     d = applyXpGain(d, xp, hi);
     commit(d);
     const newLevel = getLevel(d.xp);
     if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
     setReward({
-      icon: '⚡', title: label, xp,
+      icon, title: name, xp,
       message: missed.length === 0 ? '全項目ノーミス！' : `つまずき ${missed.length} 項目`,
     });
     setParticles(xp);
