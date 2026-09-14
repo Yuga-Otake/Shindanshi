@@ -2776,6 +2776,7 @@ const DEFAULT_DATA = {
   financeProgress: {},
   caseProgress: {},
   drillProgress: {},
+  audioProgress: { date: '', seconds: 0, xp: 0 },
   dailyLog: {},
   procedureCase:    null,
   procedureChecked: [],
@@ -7655,7 +7656,427 @@ const DRILL_COMPONENTS = {
   fx:       FxDrill,
 };
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillComplete }) {
+// ============================================================
+// 聞くモード（問い → 間 → 答え）
+// ============================================================
+
+// 与件の言い回しから切り口を引くためのカード。
+// 問いは必ず「与件の表現 → 切り口は？」の形にそろえ、聞き慣れたリズムで
+// 予測が働くようにする。答えは「切り口。打ち手。効果」の一文にまとめる。
+const SIGNAL_CARDS = [
+  // ===== 事例I 組織・人事 =====
+  { case: 'case1', q: 'ベテラン社員の高齢化が進み、技術の継承が課題である。切り口は？',
+    a: '技能承継。OJT、ジョブローテーション、資格制度で計画的に育成し、ノウハウを組織に蓄積する。' },
+  { case: 'case1', q: '社長がすべての意思決定を行っている。切り口は？',
+    a: '権限委譲。中間管理職に権限を移し、育成を進めることで、意思決定を速め、後継者を育てる。' },
+  { case: 'case1', q: '営業部門と製造部門の連携が取れていない。切り口は？',
+    a: '組織構造。部門横断のプロジェクトチームと情報共有の場を設け、部門間の調整を図る。' },
+  { case: 'case1', q: '若手社員の離職が続いている。切り口は？',
+    a: '定着。評価基準の明確化とキャリアパスの提示、OJTによる育成で、士気と定着率を高める。' },
+  { case: 'case1', q: '同族企業で、非同族社員の士気が低い。切り口は？',
+    a: '公平な処遇。能力と成果にもとづく評価と登用を行い、非同族社員の納得感と意欲を高める。' },
+  { case: 'case1', q: '創業以来の理念が社員に浸透していない。切り口は？',
+    a: '組織文化。理念を明文化し、経営者が繰り返し発信することで、組織の一体感を醸成する。' },
+  { case: 'case1', q: '成果主義を導入したが、社員どうしの協力が減った。切り口は？',
+    a: '評価制度。個人成果に加えてチームへの貢献も評価に組み込み、協働を促す。' },
+  { case: 'case1', q: '専門性の高い人材が特定部署に固定されている。切り口は？',
+    a: '配置。ジョブローテーションで多様な経験を積ませ、全社的な視野を持つ人材を育てる。' },
+  { case: 'case1', q: '事業の多角化が進み、意思決定が遅くなっている。切り口は？',
+    a: '組織構造。事業部制へ移行し、事業ごとに損益責任と権限を持たせて意思決定を速める。' },
+  { case: 'case1', q: '新規事業に取り組むが、既存事業の人材しかいない。切り口は？',
+    a: '採用と配置。中途採用で外部の知見を取り込み、社内公募で意欲ある人材を新規事業に充てる。' },
+  { case: 'case1', q: '繁忙期と閑散期の差が大きく、人員配置に無駄がある。切り口は？',
+    a: '配置の柔軟化。多能工化と非正規社員の活用で、需要の変動に人員を合わせる。' },
+  { case: 'case1', q: '高付加価値品への転換を目指している。切り口は？',
+    a: '組織と人材。技術者の採用と育成、研究開発体制の整備で、高付加価値化を支える。' },
+
+  // ===== 事例II マーケティング =====
+  { case: 'case2', q: '既存顧客の高齢化が進み、来店頻度が落ちている。切り口は？',
+    a: '関係性強化。顧客データベースを活用したDMやイベントで再来店を促し、顧客生涯価値を高める。' },
+  { case: 'case2', q: '地域に同業の若手経営者との交流がある。切り口は？',
+    a: '地域連携。共同イベントや共同販促で送客し合い、地域全体の魅力を高めて集客につなげる。' },
+  { case: 'case2', q: '自社の強みである技術が顧客に知られていない。切り口は？',
+    a: 'プロモーション。SNSや実演販売で強みを発信し、認知を高めて来店を促す。' },
+  { case: 'case2', q: '近隣に大型店が出店した。切り口は？',
+    a: '差別化。品揃えの専門性と接客力で、価格ではなく提案で選ばれる層を狙い、固定客を確保する。' },
+  { case: 'case2', q: '新規顧客は増えるが、リピートしない。切り口は？',
+    a: '固定客化。ポイント制度とアフターフォローで再購買を促し、関係を継続させる。' },
+  { case: 'case2', q: '若年層の顧客が少ない。切り口は？',
+    a: 'ターゲット。SNSでの情報発信と若年層向けの商品開発で、新たな顧客層を開拓する。' },
+  { case: 'case2', q: '自社ECサイトを開設したが売れていない。切り口は？',
+    a: '双方向性。SNSとの連携と顧客の声の掲載で関係を築き、サイトへの訪問と購買につなげる。' },
+  { case: 'case2', q: '観光客は来るが地元客が来ない。切り口は？',
+    a: 'セグメント。地元客向けの商品と告知を分けて設計し、両方の需要を取り込む。' },
+  { case: 'case2', q: '商品の種類が多すぎて特徴が伝わらない。切り口は？',
+    a: '絞り込み。強みのある商品に集中し、明確な訴求で差別化を図る。' },
+  { case: 'case2', q: '顧客の要望を聞く機会がない。切り口は？',
+    a: '双方向。アンケートやSNSで顧客の声を集め、商品開発に反映して満足度を高める。' },
+  { case: 'case2', q: '贈答需要が減っている。切り口は？',
+    a: '用途開発。自家需要向けの小容量商品を開発し、新しい使い方を提案して需要を作る。' },
+  { case: 'case2', q: '従業員が接客に慣れておらず、販売機会を逃している。切り口は？',
+    a: '接客力。研修と接客手順の整備で提案力を高め、客単価と顧客満足度を上げる。' },
+
+  // ===== 事例III 生産・技術 =====
+  { case: 'case3', q: '納期遅延が慢性的に発生している。切り口は？',
+    a: '生産計画。全社での計画立案と短サイクル化、進捗の共有により、納期遵守率を高める。' },
+  { case: 'case3', q: '特定の熟練者しかできない工程がある。切り口は？',
+    a: '標準化と多能工化。作業手順を標準化しマニュアル化したうえでOJTを行い、属人化を解消する。' },
+  { case: 'case3', q: '材料在庫が過大になっている。切り口は？',
+    a: '在庫管理。発注点と発注量を見直し生産計画と連動させ、在庫を圧縮して資金繰りを改善する。' },
+  { case: 'case3', q: '段取り替えに時間がかかっている。切り口は？',
+    a: '段取り改善。内段取りを外段取りにし、治具を標準化して段取り時間を短縮し、小ロット化に対応する。' },
+  { case: 'case3', q: '受注から生産までの情報が紙でやり取りされている。切り口は？',
+    a: '情報共有。生産管理システムを導入してデータを一元化し、リードタイムを短縮する。' },
+  { case: 'case3', q: '生産計画が月次で立てられている。切り口は？',
+    a: '計画サイクル。週次、日次へ短サイクル化して需要変動に対応し、仕掛品と納期遅延を減らす。' },
+  { case: 'case3', q: '不良品が後工程で見つかることが多い。切り口は？',
+    a: '品質管理。各工程での自主検査と、不良原因の分析を標準へ反映し、品質を工程で作り込む。' },
+  { case: 'case3', q: '工場が手狭で、仕掛品が通路にあふれている。切り口は？',
+    a: '工程レイアウト。工程順にレイアウトを見直し仕掛品を減らして、運搬距離と停滞をなくす。' },
+  { case: 'case3', q: '外注先の品質にばらつきがある。切り口は？',
+    a: '外注管理。検査基準を明確にし技術指導と定期評価を行って、外注先の品質を安定させる。' },
+  { case: 'case3', q: '新製品の試作に時間がかかっている。切り口は？',
+    a: '設計と製造の連携。開発の初期から製造部門が参画し、作りやすさを織り込んで試作期間を縮める。' },
+  { case: 'case3', q: '受注量が変動し、残業で対応している。切り口は？',
+    a: '平準化。生産を平準化し、多能工による応援体制で変動を吸収して、残業を削減する。' },
+  { case: 'case3', q: '作業者ごとに作業時間のばらつきが大きい。切り口は？',
+    a: '標準時間。作業分析により標準時間を設定し教育を行って、ばらつきをなくし生産性を高める。' },
+];
+
+const AUDIO_CASE_LABEL = {
+  case1: '事例I 組織・人事', case2: '事例II マーケティング',
+  case3: '事例III 生産・技術', case4: '事例IV 財務・会計',
+};
+
+// 読み上げ用にテキストを整える。記号をそのまま読ませると不自然になる。
+function speechText(s) {
+  return String(s)
+    .replace(/（([^）]*)）/g, '、$1、')
+    .replace(/\(([^)]*)\)/g, '、$1、')
+    .replace(/[・／\/]/g, '、')
+    .replace(/→/g, '、なので、')
+    .replace(/[＝=]/g, 'は、')
+    .replace(/[〜～]/g, 'から')
+    .replace(/[×✕]/g, 'かける')
+    .replace(/[÷]/g, 'わる')
+    .replace(/[「」『』]/g, '')
+    .replace(/、{2,}/g, '、')
+    .replace(/^、|、$/g, '');
+}
+
+// デッキ一覧。与件シグナルと、既存のフラッシュカードを同じ器で扱う。
+function audioDecks() {
+  const decks = [];
+  for (const cs of ['case1', 'case2', 'case3']) {
+    const items = SIGNAL_CARDS.filter(c => c.case === cs);
+    if (items.length) decks.push({
+      id: 'signal_' + cs, group: '与件シグナル', icon: '🔑',
+      title: AUDIO_CASE_LABEL[cs].split(' ')[0] + ' 与件シグナル',
+      desc: '与件の言い回しから切り口を引く',
+      items,
+    });
+  }
+  for (const cs of ['case1', 'case2', 'case3', 'case4']) {
+    const items = (TEXTBOOK_CONTENT[cs] || []).flatMap(t => (t.cards || []).map(c => ({ q: c.front, a: c.back })));
+    if (items.length) decks.push({
+      id: 'card_' + cs, group: '知識カード', icon: '📇',
+      title: AUDIO_CASE_LABEL[cs].split(' ')[0] + ' 知識カード',
+      desc: 'テキストのフラッシュカードを音声で',
+      items,
+    });
+  }
+  const allSignal = SIGNAL_CARDS.slice();
+  decks.push({
+    id: 'signal_all', group: 'まとめて', icon: '🎧',
+    title: '与件シグナル 全事例', desc: '事例I〜IIIを混ぜて回す', items: allSignal,
+  });
+  return decks;
+}
+
+// 再生キュー（問い→答えの2発話）を作る
+function audioQueue(items, shuffle) {
+  const a = items.map((x, i) => ({ ...x, key: i }));
+  if (shuffle) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+  }
+  return a;
+}
+
+// 読み上げ1本。音声エンジンが無い端末でも止まらないよう、
+// onend が来なくても文字数から見積もった時間で必ず次へ進める。
+function speakOnce(text, rate, onDone) {
+  // 見張りタイマーは実際の読み上げより必ず長くする。短いと発話の途中で
+  // 次へ進んでしまい、キューに溜まった音声と画面がずれる。
+  const estimate = Math.max(2000, (text.length * 220) / Math.max(0.5, rate)) + 1500;
+  let done = false;
+  const finish = () => { if (done) return; done = true; clearTimeout(timer); onDone(); };
+  const timer = setTimeout(finish, estimate);
+  try {
+    if (typeof speechSynthesis === 'undefined') return () => { done = true; clearTimeout(timer); };
+    speechSynthesis.cancel();   // 前の発話が残っていると重なって読まれる
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP';
+    u.rate = rate;
+    u.onend = finish;
+    u.onerror = finish;
+    speechSynthesis.speak(u);
+  } catch { /* 読み上げ非対応でもタイマーで進む */ }
+  return () => {
+    done = true;
+    clearTimeout(timer);
+    try { speechSynthesis.cancel(); } catch { /* noop */ }
+  };
+}
+
+const AUDIO_GAPS   = [3, 5, 8];
+const AUDIO_RATES  = [0.9, 1.0, 1.2];
+
+function AudioMode({ data, onAudioProgress, onExit }) {
+  const [deck, setDeck]       = useState(null);
+  const [queue, setQueue]     = useState([]);
+  const [idx, setIdx]         = useState(0);
+  const [phase, setPhase]     = useState('q');     // q → gap → a
+  const [playing, setPlaying] = useState(false);
+  const [gapLeft, setGapLeft] = useState(0);
+
+  const [gap, setGap]         = useState(5);
+  const [rate, setRate]       = useState(1.0);
+  const [shuffle, setShuffle] = useState(true);
+  const [loop, setLoop]       = useState(true);
+  const [showText, setShowText] = useState(true);
+
+  const stopRef  = useRef(null);
+  const wakeRef  = useRef(null);
+  const secsRef  = useRef(0);
+
+  const item = queue[idx];
+
+  // 画面が消えると読み上げが止まる端末があるので、再生中はスリープを抑止する
+  useEffect(() => {
+    if (playing) {
+      navigator.wakeLock?.request('screen').then(s => { wakeRef.current = s; }).catch(() => {});
+    } else {
+      wakeRef.current?.release?.().catch(() => {});
+      wakeRef.current = null;
+    }
+    return () => { wakeRef.current?.release?.().catch(() => {}); wakeRef.current = null; };
+  }, [playing]);
+
+  // 再生時間を貯めて、5分ごとにXPを渡す
+  useEffect(() => {
+    if (!playing) return;
+    const t = setInterval(() => {
+      secsRef.current += 1;
+      if (secsRef.current >= 300) { secsRef.current = 0; onAudioProgress?.(300); }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [playing, onAudioProgress]);
+
+  // 問い → 間 → 答え の3拍を回す
+  useEffect(() => {
+    if (!playing || !item) return;
+    let cancelled = false;
+
+    if (phase === 'q') {
+      stopRef.current = speakOnce(speechText(item.q), rate, () => {
+        if (!cancelled) { setGapLeft(gap); setPhase('gap'); }
+      });
+      return () => { cancelled = true; stopRef.current?.(); };
+    }
+
+    if (phase === 'gap') {
+      const t = setInterval(() => {
+        setGapLeft(v => {
+          if (v <= 1) { clearInterval(t); if (!cancelled) setPhase('a'); return 0; }
+          return v - 1;
+        });
+      }, 1000);
+      return () => { cancelled = true; clearInterval(t); };
+    }
+
+    stopRef.current = speakOnce(speechText(item.a), rate, () => {
+      if (cancelled) return;
+      if (idx + 1 < queue.length) { setIdx(idx + 1); setPhase('q'); }
+      else if (loop) { setQueue(audioQueue(deck.items, shuffle)); setIdx(0); setPhase('q'); }
+      else { setPlaying(false); setPhase('q'); }
+    });
+    return () => { cancelled = true; stopRef.current?.(); };
+  }, [playing, phase, idx, item, rate, gap, loop, shuffle, queue.length, deck]);
+
+  function start(d) {
+    setDeck(d);
+    setQueue(audioQueue(d.items, shuffle));
+    setIdx(0); setPhase('q'); setPlaying(true);
+    secsRef.current = 0;
+  }
+
+  function jump(n) {
+    stopRef.current?.();
+    const next = idx + n;
+    if (next < 0 || next >= queue.length) return;
+    setIdx(next); setPhase('q');
+  }
+
+  function leave() {
+    stopRef.current?.();
+    setPlaying(false);
+    setDeck(null);
+  }
+
+  // ---- デッキ選択 ----
+  if (!deck) {
+    const decks = audioDecks();
+    const groups = [...new Set(decks.map(d => d.group))];
+    const total = SIGNAL_CARDS.length + decks.filter(d => d.id.startsWith('card_')).reduce((a, d) => a + d.items.length, 0);
+    return (
+      <div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>🎧 聞くモード</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.7 }}>
+          問いを読み上げ、{gap}秒の間を置いてから答えを言います。画面を見なくても進みます。
+          全{total}問。
+        </div>
+
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+          padding: '10px 12px', marginBottom: 14, fontSize: 12, color: C.muted, lineHeight: 1.8,
+        }}>
+          考える間：{AUDIO_GAPS.map(g => (
+            <button key={g} onClick={() => setGap(g)} style={{
+              margin: '0 4px', padding: '3px 10px', borderRadius: 12, cursor: 'pointer',
+              border: `1px solid ${gap === g ? C.accent : C.border}`,
+              background: gap === g ? C.accent + '22' : 'transparent',
+              color: gap === g ? C.accent : C.muted, fontSize: 12, fontFamily: 'inherit',
+            }}>{g}秒</button>
+          ))}
+          <br />
+          読む速さ：{AUDIO_RATES.map(r => (
+            <button key={r} onClick={() => setRate(r)} style={{
+              margin: '0 4px', padding: '3px 10px', borderRadius: 12, cursor: 'pointer',
+              border: `1px solid ${rate === r ? C.accent : C.border}`,
+              background: rate === r ? C.accent + '22' : 'transparent',
+              color: rate === r ? C.accent : C.muted, fontSize: 12, fontFamily: 'inherit',
+            }}>{r}倍</button>
+          ))}
+          <br />
+          {[['順番', shuffle, () => setShuffle(!shuffle), 'シャッフル'],
+            ['くり返し', loop, () => setLoop(!loop), '最後まで行ったら最初へ'],
+            ['文字表示', showText, () => setShowText(!showText), '画面にも出す']].map(([label, on, toggle, hint]) => (
+            <span key={label} onClick={toggle} style={{ cursor: 'pointer', marginRight: 14, display: 'inline-block' }}>
+              <span style={{ color: on ? C.green : C.muted }}>{on ? '☑' : '☐'}</span>
+              <span style={{ color: C.text, marginLeft: 4 }}>{label}</span>
+              <span style={{ fontSize: 10, marginLeft: 3 }}>（{hint}）</span>
+            </span>
+          ))}
+        </div>
+
+        {groups.map(g => (
+          <div key={g}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, margin: '12px 0 6px' }}>{g}</div>
+            {decks.filter(d => d.group === g).map(d => (
+              <div key={d.id} onClick={() => start(d)} style={{
+                background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+                padding: '12px 14px', marginBottom: 8, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <div style={{ fontSize: 22 }}>{d.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{d.title}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{d.desc}・{d.items.length}問</div>
+                </div>
+                <div style={{ fontSize: 16, color: C.accent }}>▶</div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ---- 再生 ----
+  const revealed = phase === 'a';
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <button onClick={leave} style={{
+          background: 'none', border: 'none', color: C.accent, cursor: 'pointer',
+          fontSize: 20, padding: 0 }}>←</button>
+        <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.text }}>{deck.title}</div>
+        <div style={{ fontSize: 12, color: C.muted }}>{idx + 1} / {queue.length}</div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 2, marginBottom: 14 }}>
+        {queue.map((_, k) => (
+          <div key={k} style={{
+            flex: 1, height: 2, borderRadius: 1,
+            background: k < idx ? C.green : k === idx ? C.gold : C.border,
+          }} />
+        ))}
+      </div>
+
+      <div style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+        padding: '22px 18px', minHeight: 260, display: 'flex', flexDirection: 'column',
+        justifyContent: 'center', marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, marginBottom: 8 }}>問い</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: C.text, lineHeight: 1.7 }}>
+          {showText ? item?.q : '（文字表示オフ）'}
+        </div>
+
+        <div style={{
+          margin: '18px 0', height: 1, background: C.border,
+        }} />
+
+        {phase === 'gap' ? (
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <div style={{ fontSize: 40, fontWeight: 700, color: C.gold }}>{gapLeft}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>考える</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 10, color: revealed ? C.green : C.border, fontWeight: 700, marginBottom: 8 }}>答え</div>
+            <div style={{
+              fontSize: 15, lineHeight: 1.8,
+              color: revealed ? C.text : 'transparent',
+              background: revealed ? 'transparent' : C.border + '55',
+              borderRadius: 6, minHeight: 24,
+            }}>
+              {showText || revealed ? (revealed ? item?.a : '　') : '　'}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <button onClick={() => jump(-1)} disabled={idx === 0} style={{
+          flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
+          background: 'transparent', color: idx === 0 ? C.border : C.text,
+          fontSize: 18, cursor: idx === 0 ? 'default' : 'pointer', fontFamily: 'inherit',
+        }}>⏮</button>
+        <button onClick={() => { stopRef.current?.(); setPlaying(!playing); }} style={{
+          flex: 2, padding: 14, borderRadius: 12, border: 'none',
+          background: playing ? C.gold : C.accent, color: '#000',
+          fontSize: 18, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+        }}>{playing ? '⏸ 一時停止' : '▶ 再生'}</button>
+        <button onClick={() => jump(1)} disabled={idx + 1 >= queue.length} style={{
+          flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
+          background: 'transparent', color: idx + 1 >= queue.length ? C.border : C.text,
+          fontSize: 18, cursor: idx + 1 >= queue.length ? 'default' : 'pointer', fontFamily: 'inherit',
+        }}>⏭</button>
+      </div>
+
+      <div style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 12, lineHeight: 1.7 }}>
+        間 {gap}秒・{rate}倍{shuffle ? '・シャッフル' : ''}{loop ? '・くり返し' : ''}<br />
+        再生中は画面が消えないようにしています
+      </div>
+    </div>
+  );
+}
+
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillComplete, onAudioProgress }) {
   const [view, setView]                   = useState('list');
   const [selectedCase, setSelectedCase]   = useState('case4');
   const [filterType, setFilterType]           = useState('all');
@@ -7807,6 +8228,7 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillCompl
           {[
             { id: 'study', label: '✍️ 演習' },
             { id: 'textbook', label: '📖 テキスト' },
+            { id: 'audio', label: '🎧 聞く' },
           ].map(m => (
             <button
               key={m.id}
@@ -7821,6 +8243,10 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillCompl
             >{m.label}</button>
           ))}
         </div>
+
+        {tabMode === 'audio' && (
+          <AudioMode data={data} onAudioProgress={onAudioProgress} onExit={() => setTabMode('study')} />
+        )}
 
         {tabMode === 'textbook' && (() => {
           const topics = TEXTBOOK_CONTENT[selectedCase] || [];
@@ -8511,6 +8937,25 @@ export default function App() {
     }
   }
 
+  // 聞くモードは正誤がないので、再生した時間に対してXPを出す（1日50XPまで）
+  function handleAudioProgress(seconds) {
+    const today = todayStr();
+    const prev = data.audioProgress?.date === today
+      ? data.audioProgress
+      : { date: today, seconds: 0, xp: 0 };
+    const gained = prev.xp >= 50 ? 0 : 10;
+    let d = {
+      ...data,
+      audioProgress: { date: today, seconds: prev.seconds + seconds, xp: prev.xp + gained },
+    };
+    if (gained === 0) { commit(d); return; }
+    const prevLevel = getLevel(data.xp);
+    d = applyXpGain(d, gained, buildHistoryItem('🎧', '聞くモード 5分', gained));
+    commit(d);
+    const newLevel = getLevel(d.xp);
+    if (newLevel.lv > prevLevel.lv) setLevelUp(newLevel);
+  }
+
   function handleDrillComplete({ drill = 'cf', mode, xp, missed, label }) {
     const key = `${drill}_${mode}`;
     const icon = DRILL_LIST.find(d => d.key === drill)?.icon || '⚡';
@@ -8623,7 +9068,7 @@ export default function App() {
         <HistoryTab data={data} />
       )}
       {tab === 'finance' && (
-        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} onCaseStudyComplete={handleCaseStudyComplete} onDrillComplete={handleDrillComplete} />
+        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} onCaseStudyComplete={handleCaseStudyComplete} onDrillComplete={handleDrillComplete} onAudioProgress={handleAudioProgress} />
       )}
 
       <BottomNav active={tab} onChange={setTab} remainingCount={remainingQuests} />
