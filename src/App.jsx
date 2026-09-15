@@ -2777,6 +2777,7 @@ const DEFAULT_DATA = {
   caseProgress: {},
   drillProgress: {},
   audioProgress: { date: '', seconds: 0, xp: 0 },
+  audioKnown: {},
   dailyLog: {},
   procedureCase:    null,
   procedureChecked: [],
@@ -7904,7 +7905,7 @@ function audioDecks() {
     id: 'signal_common', group: '与件シグナル', icon: '🧭',
     title: '解答の型（全事例共通）',
     desc: '課題と問題点の違い、制約条件、因果の書き方',
-    items: common,
+    items: common.map(c => ({ ...c, k: audioKey(c.q) })),
   });
   for (const cs of ['case1', 'case2', 'case3', 'case4']) {
     const items = SIGNAL_CARDS.filter(c => c.case === cs);
@@ -7912,11 +7913,12 @@ function audioDecks() {
       id: 'signal_' + cs, group: '与件シグナル', icon: '🔑',
       title: AUDIO_CASE_LABEL[cs].split(' ')[0] + ' 与件シグナル',
       desc: cs === 'case4' ? '設問の指示から解法と書き方を引く' : '与件の言い回しから切り口を引く',
-      items,
+      items: items.map(c => ({ ...c, k: audioKey(c.q) })),
     });
   }
   for (const cs of ['case1', 'case2', 'case3', 'case4']) {
-    const items = (TEXTBOOK_CONTENT[cs] || []).flatMap(t => (t.cards || []).map(c => ({ q: c.front, a: c.back })));
+    const items = (TEXTBOOK_CONTENT[cs] || []).flatMap(t =>
+      (t.cards || []).map(c => ({ q: c.front, a: c.back, k: audioKey(c.front) })));
     if (items.length) decks.push({
       id: 'card_' + cs, group: '知識カード', icon: '📇',
       title: AUDIO_CASE_LABEL[cs].split(' ')[0] + ' 知識カード',
@@ -7927,14 +7929,22 @@ function audioDecks() {
   const allSignal = SIGNAL_CARDS.filter(c => c.case !== 'common');
   decks.push({
     id: 'signal_all', group: 'まとめて', icon: '🎧',
-    title: '与件シグナル 全事例', desc: '事例I〜IVを混ぜて回す', items: allSignal,
+    title: '与件シグナル 全事例', desc: '事例I〜IVを混ぜて回す',
+    items: allSignal.map(c => ({ ...c, k: audioKey(c.q) })),
   });
   return decks;
 }
 
-// 再生キュー（問い→答えの2発話）を作る
-function audioQueue(items, shuffle) {
-  const a = items.map((x, i) => ({ ...x, key: i }));
+// カードの識別子。問い文から安定したキーを作り、「わかった」の記録に使う。
+function audioKey(q) {
+  let h = 5381;
+  for (let i = 0; i < q.length; i++) h = ((h * 33) ^ q.charCodeAt(i)) >>> 0;
+  return h.toString(36) + '_' + q.length.toString(36);
+}
+
+// 再生キューを作る。「わかった」に入れたカードは最初から除く。
+function audioQueue(items, shuffle, known) {
+  const a = items.filter(x => !known?.[x.k]).map(x => ({ ...x }));
   if (shuffle) {
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -7942,6 +7952,32 @@ function audioQueue(items, shuffle) {
     }
   }
   return a;
+}
+
+// 問いの直前に鳴らす合図音。答えから次の問いへ切れ目なく続くと
+// 問いを聞き逃すので、無音の間と短い音で区切りを作る。
+// 外部ファイルもライブラリも使わず Web Audio で合成する。
+function playCue(ctxRef) {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!ctxRef.current) ctxRef.current = new Ctx();
+    const ctx = ctxRef.current;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const t0 = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(660, t0);
+    o.frequency.setValueAtTime(990, t0 + 0.11);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.14, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.34);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(t0);
+    o.stop(t0 + 0.36);
+  } catch { /* 音が鳴らせなくても進行は止めない */ }
 }
 
 // 読み上げ1本。音声エンジンが無い端末でも止まらないよう、
@@ -7970,28 +8006,36 @@ function speakOnce(text, rate, onDone) {
   };
 }
 
-const AUDIO_GAPS   = [3, 5, 8];
-const AUDIO_RATES  = [0.9, 1.0, 1.2];
+const AUDIO_GAPS  = [3, 5, 8];    // 考える間
+const AUDIO_RESTS = [2, 4, 6];    // 答えから次の問いまでの間
+const AUDIO_RATES = [0.9, 1.0, 1.2];
 
-function AudioMode({ data, onAudioProgress, onExit }) {
+function AudioMode({ data, onAudioProgress, onMarkKnown, onResetKnown, onExit }) {
+  const known = data.audioKnown || {};
+
   const [deck, setDeck]       = useState(null);
   const [queue, setQueue]     = useState([]);
   const [idx, setIdx]         = useState(0);
-  const [phase, setPhase]     = useState('q');     // q → gap → a
+  const [phase, setPhase]     = useState('q');     // q → gap → a → rest
   const [playing, setPlaying] = useState(false);
-  const [gapLeft, setGapLeft] = useState(0);
+  const [count, setCount]     = useState(0);       // 間のカウントダウン表示
+  const [emptied, setEmptied] = useState(false);   // 全部わかったので終了
 
   const [gap, setGap]         = useState(5);
+  const [rest, setRest]       = useState(4);
   const [rate, setRate]       = useState(1.0);
   const [shuffle, setShuffle] = useState(true);
   const [loop, setLoop]       = useState(true);
+  const [cue, setCue]         = useState(true);
   const [showText, setShowText] = useState(true);
 
-  const stopRef  = useRef(null);
-  const wakeRef  = useRef(null);
-  const secsRef  = useRef(0);
+  const stopRef = useRef(null);
+  const wakeRef = useRef(null);
+  const audioRef = useRef(null);
+  const secsRef = useRef(0);
 
   const item = queue[idx];
+  const remainingOf = (d) => d.items.filter(x => !known[x.k]).length;
 
   // 画面が消えると読み上げが止まる端末があるので、再生中はスリープを抑止する
   useEffect(() => {
@@ -8004,6 +8048,8 @@ function AudioMode({ data, onAudioProgress, onExit }) {
     return () => { wakeRef.current?.release?.().catch(() => {}); wakeRef.current = null; };
   }, [playing]);
 
+  useEffect(() => () => { try { audioRef.current?.close(); } catch { /* noop */ } }, []);
+
   // 再生時間を貯めて、5分ごとにXPを渡す
   useEffect(() => {
     if (!playing) return;
@@ -8014,41 +8060,53 @@ function AudioMode({ data, onAudioProgress, onExit }) {
     return () => clearInterval(t);
   }, [playing, onAudioProgress]);
 
-  // 問い → 間 → 答え の3拍を回す
+  // 問い → 間 → 答え → 間（合図音）→ 次の問い
   useEffect(() => {
     if (!playing || !item) return;
     let cancelled = false;
 
     if (phase === 'q') {
-      stopRef.current = speakOnce(speechText(item.q), rate, () => {
-        if (!cancelled) { setGapLeft(gap); setPhase('gap'); }
-      });
-      return () => { cancelled = true; stopRef.current?.(); };
+      if (cue) playCue(audioRef);
+      const lead = setTimeout(() => {
+        if (cancelled) return;
+        stopRef.current = speakOnce(speechText(item.q), rate, () => {
+          if (!cancelled) { setCount(gap); setPhase('gap'); }
+        });
+      }, cue ? 520 : 0);
+      return () => { cancelled = true; clearTimeout(lead); stopRef.current?.(); };
     }
 
-    if (phase === 'gap') {
+    if (phase === 'gap' || phase === 'rest') {
       const t = setInterval(() => {
-        setGapLeft(v => {
-          if (v <= 1) { clearInterval(t); if (!cancelled) setPhase('a'); return 0; }
-          return v - 1;
+        setCount(v => {
+          if (v > 1) return v - 1;
+          clearInterval(t);
+          if (!cancelled) { if (phase === 'gap') setPhase('a'); else advance(); }
+          return 0;
         });
       }, 1000);
       return () => { cancelled = true; clearInterval(t); };
     }
 
     stopRef.current = speakOnce(speechText(item.a), rate, () => {
-      if (cancelled) return;
-      if (idx + 1 < queue.length) { setIdx(idx + 1); setPhase('q'); }
-      else if (loop) { setQueue(audioQueue(deck.items, shuffle)); setIdx(0); setPhase('q'); }
-      else { setPlaying(false); setPhase('q'); }
+      if (!cancelled) { setCount(rest); setPhase('rest'); }
     });
     return () => { cancelled = true; stopRef.current?.(); };
-  }, [playing, phase, idx, item, rate, gap, loop, shuffle, queue.length, deck]);
+  }, [playing, phase, idx, item, rate, gap, rest, cue, loop, shuffle, queue.length, deck]);
+
+  function advance() {
+    if (idx + 1 < queue.length) { setIdx(idx + 1); setPhase('q'); return; }
+    if (!loop) { setPlaying(false); setPhase('q'); return; }
+    const next = audioQueue(deck.items, shuffle, known);
+    if (next.length === 0) { setPlaying(false); setEmptied(true); return; }
+    setQueue(next); setIdx(0); setPhase('q');
+  }
 
   function start(d) {
-    setDeck(d);
-    setQueue(audioQueue(d.items, shuffle));
-    setIdx(0); setPhase('q'); setPlaying(true);
+    const q = audioQueue(d.items, shuffle, known);
+    if (q.length === 0) return;
+    setDeck(d); setQueue(q); setIdx(0); setPhase('q');
+    setPlaying(true); setEmptied(false);
     secsRef.current = 0;
   }
 
@@ -8059,75 +8117,111 @@ function AudioMode({ data, onAudioProgress, onExit }) {
     setIdx(next); setPhase('q');
   }
 
+  // いま流れているカードを「わかった」に入れて次へ送る
+  function markKnown() {
+    if (!item) return;
+    stopRef.current?.();
+    onMarkKnown?.(item.k);
+    const rest2 = queue.filter((x, i) => i !== idx);
+    if (rest2.length === 0) { setPlaying(false); setEmptied(true); return; }
+    setQueue(rest2);
+    setIdx(idx >= rest2.length ? 0 : idx);
+    setPhase('q');
+  }
+
   function leave() {
     stopRef.current?.();
     setPlaying(false);
     setDeck(null);
+    setEmptied(false);
   }
+
+  const toggle = (label, on, fn, hint) => (
+    <span key={label} onClick={fn} style={{ cursor: 'pointer', marginRight: 14, display: 'inline-block' }}>
+      <span style={{ color: on ? C.green : C.muted }}>{on ? '☑' : '☐'}</span>
+      <span style={{ color: C.text, marginLeft: 4 }}>{label}</span>
+      {hint && <span style={{ fontSize: 10, marginLeft: 3 }}>（{hint}）</span>}
+    </span>
+  );
+
+  const chip = (val, cur, fn, suffix) => (
+    <button key={val} onClick={() => fn(val)} style={{
+      margin: '0 4px', padding: '3px 10px', borderRadius: 12, cursor: 'pointer',
+      border: `1px solid ${cur === val ? C.accent : C.border}`,
+      background: cur === val ? C.accent + '22' : 'transparent',
+      color: cur === val ? C.accent : C.muted, fontSize: 12, fontFamily: 'inherit',
+    }}>{val}{suffix}</button>
+  );
 
   // ---- デッキ選択 ----
   if (!deck) {
     const decks = audioDecks();
     const groups = [...new Set(decks.map(d => d.group))];
-    const total = SIGNAL_CARDS.length + decks.filter(d => d.id.startsWith('card_')).reduce((a, d) => a + d.items.length, 0);
+    const knownCount = Object.keys(known).length;
     return (
       <div>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 2 }}>🎧 聞くモード</div>
         <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.7 }}>
-          問いを読み上げ、{gap}秒の間を置いてから答えを言います。画面を見なくても進みます。
-          全{total}問。
+          問いを読み上げ、{gap}秒の間を置いてから答えを言います。答えのあとは{rest}秒あけて、
+          合図音のあと次の問いへ進みます。画面を見なくても進みます。
         </div>
 
         <div style={{
           background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
-          padding: '10px 12px', marginBottom: 14, fontSize: 12, color: C.muted, lineHeight: 1.8,
+          padding: '10px 12px', marginBottom: 14, fontSize: 12, color: C.muted, lineHeight: 1.9,
         }}>
-          考える間：{AUDIO_GAPS.map(g => (
-            <button key={g} onClick={() => setGap(g)} style={{
-              margin: '0 4px', padding: '3px 10px', borderRadius: 12, cursor: 'pointer',
-              border: `1px solid ${gap === g ? C.accent : C.border}`,
-              background: gap === g ? C.accent + '22' : 'transparent',
-              color: gap === g ? C.accent : C.muted, fontSize: 12, fontFamily: 'inherit',
-            }}>{g}秒</button>
-          ))}
-          <br />
-          読む速さ：{AUDIO_RATES.map(r => (
-            <button key={r} onClick={() => setRate(r)} style={{
-              margin: '0 4px', padding: '3px 10px', borderRadius: 12, cursor: 'pointer',
-              border: `1px solid ${rate === r ? C.accent : C.border}`,
-              background: rate === r ? C.accent + '22' : 'transparent',
-              color: rate === r ? C.accent : C.muted, fontSize: 12, fontFamily: 'inherit',
-            }}>{r}倍</button>
-          ))}
-          <br />
-          {[['順番', shuffle, () => setShuffle(!shuffle), 'シャッフル'],
-            ['くり返し', loop, () => setLoop(!loop), '最後まで行ったら最初へ'],
-            ['文字表示', showText, () => setShowText(!showText), '画面にも出す']].map(([label, on, toggle, hint]) => (
-            <span key={label} onClick={toggle} style={{ cursor: 'pointer', marginRight: 14, display: 'inline-block' }}>
-              <span style={{ color: on ? C.green : C.muted }}>{on ? '☑' : '☐'}</span>
-              <span style={{ color: C.text, marginLeft: 4 }}>{label}</span>
-              <span style={{ fontSize: 10, marginLeft: 3 }}>（{hint}）</span>
-            </span>
-          ))}
+          考える間：{AUDIO_GAPS.map(g => chip(g, gap, setGap, '秒'))}<br />
+          次の問いまで：{AUDIO_RESTS.map(r => chip(r, rest, setRest, '秒'))}<br />
+          読む速さ：{AUDIO_RATES.map(r => chip(r, rate, setRate, '倍'))}<br />
+          {toggle('順番', shuffle, () => setShuffle(!shuffle), 'シャッフル')}
+          {toggle('くり返し', loop, () => setLoop(!loop))}
+          {toggle('合図音', cue, () => setCue(!cue), '問いの前に鳴らす')}
+          {toggle('文字表示', showText, () => setShowText(!showText))}
         </div>
+
+        {knownCount > 0 && (
+          <div style={{
+            background: C.green + '14', border: `1px solid ${C.green}44`, borderRadius: 12,
+            padding: '9px 12px', marginBottom: 14, fontSize: 12, color: C.text,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ flex: 1 }}>「わかった」に入れたカード {knownCount}問は出題されません</span>
+            <button onClick={onResetKnown} style={{
+              padding: '5px 12px', borderRadius: 10, border: `1px solid ${C.green}`,
+              background: 'transparent', color: C.green, fontSize: 11, cursor: 'pointer',
+              fontFamily: 'inherit', whiteSpace: 'nowrap',
+            }}>全部戻す</button>
+          </div>
+        )}
 
         {groups.map(g => (
           <div key={g}>
             <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, margin: '12px 0 6px' }}>{g}</div>
-            {decks.filter(d => d.group === g).map(d => (
-              <div key={d.id} onClick={() => start(d)} style={{
-                background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
-                padding: '12px 14px', marginBottom: 8, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 12,
-              }}>
-                <div style={{ fontSize: 22 }}>{d.icon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{d.title}</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{d.desc}・{d.items.length}問</div>
+            {decks.filter(d => d.group === g).map(d => {
+              const left = remainingOf(d);
+              const cleared = left === 0;
+              return (
+                <div key={d.id} onClick={() => start(d)} style={{
+                  background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+                  padding: '12px 14px', marginBottom: 8,
+                  cursor: cleared ? 'default' : 'pointer',
+                  opacity: cleared ? 0.5 : 1,
+                  display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                  <div style={{ fontSize: 22 }}>{cleared ? '✅' : d.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{d.title}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      {d.desc}・{cleared ? '全問わかった' : `残り ${left}問`}
+                      {!cleared && left < d.items.length && (
+                        <span style={{ color: C.green }}> / 全{d.items.length}問</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 16, color: cleared ? C.green : C.accent }}>{cleared ? '' : '▶'}</div>
                 </div>
-                <div style={{ fontSize: 16, color: C.accent }}>▶</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ))}
       </div>
@@ -8135,7 +8229,7 @@ function AudioMode({ data, onAudioProgress, onExit }) {
   }
 
   // ---- 再生 ----
-  const revealed = phase === 'a';
+  const revealed = phase === 'a' || phase === 'rest';
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -8143,7 +8237,7 @@ function AudioMode({ data, onAudioProgress, onExit }) {
           background: 'none', border: 'none', color: C.accent, cursor: 'pointer',
           fontSize: 20, padding: 0 }}>←</button>
         <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.text }}>{deck.title}</div>
-        <div style={{ fontSize: 12, color: C.muted }}>{idx + 1} / {queue.length}</div>
+        <div style={{ fontSize: 12, color: C.muted }}>{queue.length ? idx + 1 : 0} / {queue.length}</div>
       </div>
 
       <div style={{ display: 'flex', gap: 2, marginBottom: 14 }}>
@@ -8155,67 +8249,97 @@ function AudioMode({ data, onAudioProgress, onExit }) {
         ))}
       </div>
 
-      <div style={{
-        background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
-        padding: '22px 18px', minHeight: 260, display: 'flex', flexDirection: 'column',
-        justifyContent: 'center', marginBottom: 16,
-      }}>
-        <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, marginBottom: 8 }}>問い</div>
-        <div style={{ fontSize: 17, fontWeight: 700, color: C.text, lineHeight: 1.7 }}>
-          {showText ? item?.q : '（文字表示オフ）'}
-        </div>
-
+      {emptied ? (
         <div style={{
-          margin: '18px 0', height: 1, background: C.border,
-        }} />
-
-        {phase === 'gap' ? (
-          <div style={{ textAlign: 'center', padding: '10px 0' }}>
-            <div style={{ fontSize: 40, fontWeight: 700, color: C.gold }}>{gapLeft}</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>考える</div>
+          background: C.card, border: `1px solid ${C.green}55`, borderRadius: 16,
+          padding: '28px 18px', textAlign: 'center', marginBottom: 16,
+        }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>このデッキは全部わかりました</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.7 }}>
+            戻すときは、デッキ一覧の「全部戻す」から。
           </div>
-        ) : (
-          <>
-            <div style={{ fontSize: 10, color: revealed ? C.green : C.border, fontWeight: 700, marginBottom: 8 }}>答え</div>
-            <div style={{
-              fontSize: 15, lineHeight: 1.8,
-              color: revealed ? C.text : 'transparent',
-              background: revealed ? 'transparent' : C.border + '55',
-              borderRadius: 6, minHeight: 24,
-            }}>
-              {showText || revealed ? (revealed ? item?.a : '　') : '　'}
-            </div>
-          </>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+          padding: '22px 18px', minHeight: 260, display: 'flex', flexDirection: 'column',
+          justifyContent: 'center', marginBottom: 14,
+        }}>
+          <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, marginBottom: 8 }}>問い</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: C.text, lineHeight: 1.7 }}>
+            {showText ? item?.q : '（文字表示オフ）'}
+          </div>
 
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <button onClick={() => jump(-1)} disabled={idx === 0} style={{
-          flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
-          background: 'transparent', color: idx === 0 ? C.border : C.text,
-          fontSize: 18, cursor: idx === 0 ? 'default' : 'pointer', fontFamily: 'inherit',
-        }}>⏮</button>
-        <button onClick={() => { stopRef.current?.(); setPlaying(!playing); }} style={{
-          flex: 2, padding: 14, borderRadius: 12, border: 'none',
-          background: playing ? C.gold : C.accent, color: '#000',
-          fontSize: 18, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-        }}>{playing ? '⏸ 一時停止' : '▶ 再生'}</button>
-        <button onClick={() => jump(1)} disabled={idx + 1 >= queue.length} style={{
-          flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
-          background: 'transparent', color: idx + 1 >= queue.length ? C.border : C.text,
-          fontSize: 18, cursor: idx + 1 >= queue.length ? 'default' : 'pointer', fontFamily: 'inherit',
-        }}>⏭</button>
-      </div>
+          <div style={{ margin: '18px 0', height: 1, background: C.border }} />
+
+          {phase === 'gap' ? (
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 40, fontWeight: 700, color: C.gold }}>{count}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>考える</div>
+            </div>
+          ) : (
+            <>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                marginBottom: 8,
+              }}>
+                <span style={{ fontSize: 10, color: revealed ? C.green : C.border, fontWeight: 700 }}>答え</span>
+                {phase === 'rest' && (
+                  <span style={{ fontSize: 11, color: C.accent }}>次の問いまで {count}</span>
+                )}
+              </div>
+              <div style={{
+                fontSize: 15, lineHeight: 1.8,
+                color: revealed ? C.text : 'transparent',
+                background: revealed ? 'transparent' : C.border + '55',
+                borderRadius: 6, minHeight: 24,
+              }}>
+                {revealed ? item?.a : '　'}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {!emptied && (
+        <>
+          <button onClick={markKnown} style={{
+            width: '100%', padding: '13px', borderRadius: 12,
+            border: `1px solid ${C.green}`, background: C.green + '18', color: C.green,
+            fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            marginBottom: 10,
+          }}>✓ わかった（もう出さない）</button>
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button onClick={() => jump(-1)} disabled={idx === 0} style={{
+              flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
+              background: 'transparent', color: idx === 0 ? C.border : C.text,
+              fontSize: 18, cursor: idx === 0 ? 'default' : 'pointer', fontFamily: 'inherit',
+            }}>⏮</button>
+            <button onClick={() => { stopRef.current?.(); setPlaying(!playing); }} style={{
+              flex: 2, padding: 14, borderRadius: 12, border: 'none',
+              background: playing ? C.gold : C.accent, color: '#000',
+              fontSize: 18, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>{playing ? '⏸ 一時停止' : '▶ 再生'}</button>
+            <button onClick={() => jump(1)} disabled={idx + 1 >= queue.length} style={{
+              flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
+              background: 'transparent', color: idx + 1 >= queue.length ? C.border : C.text,
+              fontSize: 18, cursor: idx + 1 >= queue.length ? 'default' : 'pointer', fontFamily: 'inherit',
+            }}>⏭</button>
+          </div>
+        </>
+      )}
 
       <div style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 12, lineHeight: 1.7 }}>
-        間 {gap}秒・{rate}倍{shuffle ? '・シャッフル' : ''}{loop ? '・くり返し' : ''}<br />
+        考える間 {gap}秒・次の問いまで {rest}秒・{rate}倍{shuffle ? '・シャッフル' : ''}{loop ? '・くり返し' : ''}{cue ? '・合図音あり' : ''}<br />
         再生中は画面が消えないようにしています
       </div>
     </div>
   );
 }
 
-function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillComplete, onAudioProgress }) {
+function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillComplete, onAudioProgress, onMarkKnown, onResetKnown }) {
   const [view, setView]                   = useState('list');
   const [selectedCase, setSelectedCase]   = useState('case4');
   const [filterType, setFilterType]           = useState('all');
@@ -8384,7 +8508,9 @@ function FinanceTab({ data, onFinanceComplete, onCaseStudyComplete, onDrillCompl
         </div>
 
         {tabMode === 'audio' && (
-          <AudioMode data={data} onAudioProgress={onAudioProgress} onExit={() => setTabMode('study')} />
+          <AudioMode data={data} onAudioProgress={onAudioProgress}
+            onMarkKnown={onMarkKnown} onResetKnown={onResetKnown}
+            onExit={() => setTabMode('study')} />
         )}
 
         {tabMode === 'textbook' && (() => {
@@ -9076,6 +9202,14 @@ export default function App() {
     }
   }
 
+  function handleMarkKnown(key) {
+    commit({ ...data, audioKnown: { ...(data.audioKnown || {}), [key]: true } });
+  }
+
+  function handleResetKnown() {
+    commit({ ...data, audioKnown: {} });
+  }
+
   // 聞くモードは正誤がないので、再生した時間に対してXPを出す（1日50XPまで）
   function handleAudioProgress(seconds) {
     const today = todayStr();
@@ -9207,7 +9341,8 @@ export default function App() {
         <HistoryTab data={data} />
       )}
       {tab === 'finance' && (
-        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} onCaseStudyComplete={handleCaseStudyComplete} onDrillComplete={handleDrillComplete} onAudioProgress={handleAudioProgress} />
+        <FinanceTab data={data} onFinanceComplete={handleFinanceComplete} onCaseStudyComplete={handleCaseStudyComplete} onDrillComplete={handleDrillComplete} onAudioProgress={handleAudioProgress}
+          onMarkKnown={handleMarkKnown} onResetKnown={handleResetKnown} />
       )}
 
       <BottomNav active={tab} onChange={setTab} remainingCount={remainingQuests} />
