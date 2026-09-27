@@ -5509,6 +5509,190 @@ function buildAnaSteps(c) {
   return { steps: s, info: c };
 }
 
+// ---- 生産性（労働生産性の分解）----
+// 労働生産性は三通りに分解できる。どの分解式でも同じ値になることが
+// 検算になるので、生成時も恒等式が厳密に成り立つようにする。
+function buildProdCase() {
+  const weak = drillPick(['perHead', 'vaRate']);   // D社が劣っている要因
+  const c = { weak };
+  c.empD = drillRnd(20, 80, 5);
+  c.empP = drillRnd(20, 80, 5);
+  const perHeadP = drillRnd(22, 45, 1);            // 1人あたり売上高（百万円）
+  const vaRateP  = drillRnd(22, 45, 1) / 100;      // 付加価値率
+  const down = () => drillRnd(60, 80, 1) / 100;
+  const flat = () => drillRnd(100, 112, 1) / 100;
+  const perHeadD = perHeadP * (weak === 'perHead' ? down() : flat());
+  const vaRateD  = vaRateP  * (weak === 'vaRate'  ? down() : flat());
+
+  const mk = (emp, perHead, vaRate, equip) => {
+    const sales = perHead * emp;
+    const va = sales * vaRate;
+    const tangible = equip * emp;
+    return {
+      emp, sales, va, tangible,
+      perHead,                       // 1人あたり売上高
+      vaRate,                        // 付加価値率
+      equip,                         // 労働装備率
+      lp: va / emp,                  // 労働生産性
+      facPro: va / tangible,         // 設備生産性
+      tanTurn: sales / tangible,     // 有形固定資産回転率
+    };
+  };
+  c.d = mk(c.empD, perHeadD, vaRateD, drillRnd(8, 25, 1));
+  c.p = mk(c.empP, perHeadP, vaRateP, drillRnd(8, 25, 1));
+  return c;
+}
+
+function buildProdSteps(c) {
+  const s = drillSteps();
+  const { d, p, weak } = c;
+  const n1 = x => drillNum(x, 1);
+  const n2 = x => drillNum(x, 2);
+  const pc = x => drillNum(x * 100, 1) + '%';
+  const O = C.orange;
+
+  s.push({
+    name: '生産性という視点', tag: '準備', accent: C.muted,
+    qs: [{ step: '位置づけ', q: '収益性・効率性・安全性に加えて問われることがある四つ目の視点は。',
+      opts: [
+        { t: '生産性。人と設備がどれだけ付加価値を生んだかを見る', ok: true },
+        { t: '成長性。売上や利益がどれだけ伸びたかを見る' },
+        { t: '流動性。手元資金がどれだけあるかを見る' },
+        { t: '市場性。株価が割安かどうかを見る' }],
+      why: '生産性は過去に一度だけ出題されている視点。設問文に「生産性」や「従業員一人あたり」「付加価値」という言葉が出たら、この視点が問われていると判断する。' }],
+  });
+
+  s.push({
+    name: '労働生産性', tag: '①定義', accent: O, show: 'lp',
+    qs: [{ step: '定義式', q: '労働生産性を求める式は。',
+      opts: [
+        { t: '付加価値 ÷ 従業員数', ok: true },
+        { t: '売上高 ÷ 従業員数' },
+        { t: '営業利益 ÷ 従業員数' },
+        { t: '付加価値 ÷ 売上高' }],
+      why: '一人あたりどれだけの付加価値を生んだか。D社 ' + n1(d.lp) + '、同業他社 ' + n1(p.lp) + '（百万円／人）。売上高を従業員数で割ったものは一人あたり売上高で、労働生産性の一部にすぎない。' }],
+  });
+
+  s.push({
+    name: '分解式その1', tag: '②分解', accent: O, show: 'split1',
+    qs: [
+      { step: '1／2　分解', q: '労働生産性を二つの要素に分ける。最も基本的な分け方は。',
+        opts: [
+          { t: '一人あたり売上高 × 付加価値率', ok: true },
+          { t: '一人あたり売上高 ÷ 付加価値率' },
+          { t: '売上高 × 付加価値率' },
+          { t: '総資本回転率 × 付加価値率' }],
+        why: '付加価値÷従業員数を、売上高を間にはさんで分ける。（売上高÷従業員数）×（付加価値÷売上高）で売上高が約分され、元の式に戻る。' },
+      { step: '2／2　原因の特定',
+        q: '一人あたり売上高は D社 ' + n1(d.perHead) + ' 対 他社 ' + n1(p.perHead) + '、付加価値率は D社 ' + pc(d.vaRate) + ' 対 他社 ' + pc(p.vaRate) + '。D社の労働生産性が低い主因は。',
+        opts: [
+          { t: '一人あたり売上高が低いこと。人数に対して売上が小さい', ok: weak === 'perHead' },
+          { t: '付加価値率が低いこと。売上のうち手元に残る割合が小さい', ok: weak === 'vaRate' },
+          { t: '両方とも他社を上回っており、労働生産性に問題はない' },
+          { t: '従業員数が他社より少ないこと' }],
+        why: weak === 'perHead'
+          ? '付加価値率は他社並みなので、売上そのものが人数に見合っていない。過剰人員か、稼働率か、受注量のどれかを与件から探すことになる。'
+          : '一人あたり売上高は他社並みなので、売上は立っているが手元に残る割合が小さい。外注比率の高さや原材料費の高騰を与件から探す。' }],
+  });
+
+  s.push({
+    name: '分解式その2', tag: '②分解', accent: O, show: 'split2',
+    qs: [{ step: '設備から見る', q: '設備の面から労働生産性を分けると、どうなるか。',
+      opts: [
+        { t: '労働装備率 × 設備生産性', ok: true },
+        { t: '労働装備率 × 有形固定資産回転率' },
+        { t: '労働装備率 ÷ 設備生産性' },
+        { t: '設備生産性 × 付加価値率' }],
+      why: '労働装備率は一人あたりの有形固定資産、設備生産性は設備が生んだ付加価値。（有形固定資産÷従業員数）×（付加価値÷有形固定資産）で有形固定資産が約分される。D社は ' + n1(d.equip) + ' × ' + n2(d.facPro) + ' ＝ ' + n1(d.lp) + '。' }],
+  });
+
+  s.push({
+    name: '分解式その3', tag: '②分解', accent: O, show: 'split3',
+    qs: [{ step: '三つに分ける', q: '設備生産性をさらに二つに分けると、労働生産性は三要素になる。何と何と何か。',
+      opts: [
+        { t: '労働装備率 × 有形固定資産回転率 × 付加価値率', ok: true },
+        { t: '労働装備率 × 総資本回転率 × 付加価値率' },
+        { t: '一人あたり売上高 × 有形固定資産回転率 × 付加価値率' },
+        { t: '労働装備率 × 設備生産性 × 付加価値率' }],
+      why: '設備生産性（付加価値÷有形固定資産）を、売上高をはさんで（売上高÷有形固定資産）×（付加価値÷売上高）に割る。設備・回転・利幅の三つに分かれるので、どこに手を打つかが具体的に言える。' }],
+  });
+
+  s.push({
+    name: '助言の方向', tag: '③助言', accent: C.gold, show: 'advice',
+    qs: [
+      { step: '1／2　方向', q: '労働生産性を高める助言の方向は。',
+        opts: [
+          { t: '分子の付加価値を大きくし、分母の従業員数や設備を小さくする', ok: true },
+          { t: '分子も分母も同じ割合で大きくする' },
+          { t: '売上高を増やすことだけを考える' },
+          { t: '従業員数を増やして生産量を上げる' }],
+        why: 'どの分解式も分子と分母の組み合わせでできている。付加価値率を上げる、遊休設備を減らす、少ない人数で回す。与件のどこに手が打てるかで、三つのうちどの分解式で語るかを選ぶ。' },
+      { step: '2／2　具体策',
+        q: weak === 'perHead'
+          ? '一人あたり売上高が低いことが主因だった。助言として筋が通るのは。'
+          : '付加価値率が低いことが主因だった。助言として筋が通るのは。',
+        opts: weak === 'perHead'
+          ? [{ t: '多能工化や工程改善で少ない人数で回し、受注を増やして稼働を上げる', ok: true },
+             { t: '外注を増やして内製をやめる' },
+             { t: '設備を追加して労働装備率を上げる' },
+             { t: '従業員を増やして生産量を増やす' }]
+          : [{ t: '内製化や高付加価値品への転換で、売上のうち手元に残る割合を高める', ok: true },
+             { t: '人員を増やして生産量を増やす' },
+             { t: '値下げして売上数量を伸ばす' },
+             { t: '遊休設備を増やして生産余力を持つ' }],
+        why: weak === 'perHead'
+          ? '売上が人数に見合っていないのだから、人あたりの産出を増やす方向。設備を足すと労働装備率は上がるが、稼いでいない設備が増えるだけで生産性は下がりうる。'
+          : '売上は立っているのに残らないのだから、利幅を厚くする方向。値下げは付加価値率をさらに下げるので逆効果になる。' }],
+  });
+
+  return { steps: s, info: { ...c, mode: 'productivity' } };
+}
+
+function ProdLedger({ ledger, info }) {
+  const { d, p } = info;
+  const S = ledger.show;
+  const cols = '1fr 62px 62px';
+  const row = (label, a, b, hi) => (
+    <div key={label} style={{
+      display: 'grid', gridTemplateColumns: cols, gap: 6, padding: '5px 12px', fontSize: 11,
+      background: hi ? C.gold + '14' : 'transparent',
+    }}>
+      <span style={{ color: C.text }}>{label}</span>
+      <span style={{ textAlign: 'right', color: C.text }}>{a}</span>
+      <span style={{ textAlign: 'right', color: C.muted }}>{b}</span>
+    </div>
+  );
+  const n1 = x => drillNum(x, 1);
+  const n2 = x => drillNum(x, 2);
+  const pc = x => drillNum(x * 100, 1) + '%';
+  return (
+    <DrillCard title="財務数値（単位：百万円）" color={C.orange} style={{ marginBottom: 16 }}>
+      <div style={{ padding: '0 0 6px' }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: cols, gap: 6, padding: '5px 12px',
+          fontSize: 10, color: C.muted, fontWeight: 700, borderBottom: `1px solid ${C.border}`,
+        }}>
+          <span>項目</span><span style={{ textAlign: 'right' }}>D社</span><span style={{ textAlign: 'right' }}>同業他社</span>
+        </div>
+        {row('売上高', n1(d.sales), n1(p.sales))}
+        {row('付加価値', n1(d.va), n1(p.va))}
+        {row('従業員数', drillInt(d.emp) + '人', drillInt(p.emp) + '人')}
+        {row('有形固定資産', n1(d.tangible), n1(p.tangible))}
+        {S.includes('lp') && row('労働生産性', n1(d.lp), n1(p.lp), true)}
+        {S.includes('split1') && <>
+          {row('　一人あたり売上高', n1(d.perHead), n1(p.perHead))}
+          {row('　付加価値率', pc(d.vaRate), pc(p.vaRate))}
+        </>}
+        {S.includes('split2') && <>
+          {row('　労働装備率', n1(d.equip), n1(p.equip))}
+          {row('　設備生産性', n2(d.facPro), n2(p.facPro))}
+        </>}
+        {S.includes('split3') && row('　有形固定資産回転率', n2(d.tanTurn) + '回', n2(p.tanTurn) + '回')}
+      </div>
+    </DrillCard>
+  );
+}
+
 function AnalysisDrill({ onFinish, onExit }) {
   return (
     <DrillRunner
@@ -5517,22 +5701,47 @@ function AnalysisDrill({ onFinish, onExit }) {
         key: 'analysis', icon: '📉', title: '経営分析ドリル', accent: C.orange,
         lead: '事例IV第1問の型。財務諸表を見て、3軸それぞれで「差がはっきり出ていて、強み／課題を的確に表す指標」を選び、優劣を判断して、原因の見立てまでつなげます。数値は毎回変わります。',
       }}
-      modes={[{ id: 'pick', icon: '🔍', title: '指標選択', desc: '収益性・効率性・安全性から1つずつ指標を選び、優劣と原因まで。5項目12問。', xp: 90 }]}
-      build={() => {
+      modes={[
+        { id: 'pick', icon: '🔍', title: '指標選択', desc: '収益性・効率性・安全性から1つずつ指標を選び、優劣と原因まで。5項目12問。', xp: 90 },
+        { id: 'productivity', icon: '⚙️', title: '生産性の分解', desc: '労働生産性を三通りに分解し、どの要素が足を引っ張っているかを特定する。6項目8問。', xp: 90 },
+      ]}
+      build={(m) => {
+        if (m === 'productivity') {
+          return { ...buildProdSteps(buildProdCase()), ledger: { show: [] } };
+        }
         const c = buildAnaCase();
         return { ...buildAnaSteps(c), ledger: { picked: [] } };
       }}
       applyStep={(ledger, step, info) => {
+        if (info.mode === 'productivity') {
+          return { show: step.show ? [...ledger.show, step.show] : ledger.show };
+        }
         const ax = ANA_AXES.find(a => a.label === step.tag);
         if (!ax) return ledger;
         const win = info.picks[ax.id];
         return { picked: [...ledger.picked, { axis: ax, key: win.k, dv: win.dv, pv: win.pv }] };
       }}
       headerNote={() => '単位：百万円'}
-      hint={() => '同業他社との差がどの指標でいちばん大きいか、その指標は高いほど良いのかで考えてみてください。'}
+      hint={(step) => step.tag === '②分解' || step.tag === '①定義'
+        ? '分子と分母に何を置けば約分されて元の式に戻るか、で考えてみてください。'
+        : '同業他社との差がどの指標でいちばん大きいか、その指標は高いほど良いのかで考えてみてください。'}
       nextLabel={() => '指標表に記入する'}
-      renderLedger={(ledger, info) => <AnaLedger ledger={ledger} info={info} />}
-      renderResult={(ledger, info, missed) => (
+      renderLedger={(ledger, info) => info.mode === 'productivity'
+        ? <ProdLedger ledger={ledger} info={info} />
+        : <AnaLedger ledger={ledger} info={info} />}
+      renderResult={(ledger, info, missed) => info.mode === 'productivity' ? (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>労働生産性</div>
+          <div style={{ fontSize: 30, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.orange }}>
+            {drillNum(info.d.lp, 1)}
+            <span style={{ fontSize: 14, color: C.muted }}> 対 他社 {drillNum(info.p.lp, 1)}</span>
+          </div>
+          <div style={{ fontSize: 13, color: C.red, fontWeight: 700, marginTop: 6 }}>
+            主因：{info.weak === 'perHead' ? '一人あたり売上高が低い' : '付加価値率が低い'}
+          </div>
+        </div>
+      ) : (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>選んだ3指標</div>
@@ -7924,6 +8133,49 @@ const SIGNAL_CARDS = [
     a: '収益性、効率性、安全性のどれに効くかを明示する。第1問で挙げた指標との一貫性をとり、記述は必ず埋めきる。' },
   { case: 'case4', q: '事例IVの解く順番はどう決めるか？',
     a: '第1問の経営分析を確実に取り、あとは解けるものから拾う。残り20分で組み立て直し、記述は与件を使って必ず埋める。' },
+
+  // ===== 設問パターン（過去問の設問の問われ方ごとの論点）=====
+  // 設問文の言い回しから、何を答えるべきかを引く。
+  { case: 'ask', q: '設問に「および」という接続詞があった。何を読み取るか？',
+    a: '並列。目的や対象が二つある。二つそれぞれに対応した解答要素を用意する。片方だけだと題意ズレになる。' },
+  { case: 'ask', q: '設問に「整理せよ」とあった。何を求められているか？',
+    a: '取捨選択。要るものと要らないものを分けて、要らないものを落とす。与件を全部並べるのは整理ではない。' },
+  { case: 'ask', q: '設問に「いくつかの」という言葉があった。要素はいくつ書くか？',
+    a: '二つ。数を指定しない言い回しは、二つで構成するのが基本。字数を均等に配分する。' },
+  { case: 'ask', q: '「強み」を問われた。何を基準に選ぶか？',
+    a: '最終問の戦略で活かせる経営資源。特に無形資源に着目する。第1問を単独で解かず、答案を書く順番は最後に回す。' },
+  { case: 'ask', q: '「弱み」を問われた。何を基準に選ぶか？',
+    a: '以降の設問で克服する、あるいは解決策を助言できる経営資源。後半の設問で手が打てないものは挙げない。' },
+  { case: 'ask', q: 'SWOTの四要素すべてを問われた。機会と脅威はどこから取るか？',
+    a: '与件文から特定する。一般的なマクロ動向ではなく、与件に書かれた変化と競合。事例IIの脅威はミクロつまり競合を優先する。' },
+  { case: 'ask', q: '「取り組みや工夫」を問われた。どう書き分けるか？',
+    a: '主語を置いて、取り組みと工夫が別の要素だと採点者に分かるように書く。言い回しが二つあるなら、解答も二つに分ける。' },
+  { case: 'ask', q: '「採用すべき組織体制とその理由」を助言する。何を書くか？',
+    a: '結論として組織形態を一つ特定し、その形態のメリットを理由にする。事業部制なら権限委譲、環境変化への迅速な対応、経営者的人材の育成。' },
+  { case: 'ask', q: '「留意点」を問われた。どの視点で挙げるか？',
+    a: '経営戦略と組織戦略の二つの視点。何がうまくいかない恐れがあるかと、それをどう抑えるかをセットで書く。' },
+  { case: 'ask', q: '経営理念の「再定義と浸透策」を助言する。浸透策の切り口は？',
+    a: '社内への浸透と社外への浸透。社内は社長自らの対話と人事評価制度との連動、社外は連携活動や発信を通じた共感づくり。' },
+  { case: 'ask', q: '「誰に、何を、どのように」を問われた。字数配分は？',
+    a: 'ターゲット、商品、販売方法の三つでほぼ均等に割る。ターゲットを落とすと全体の一貫性が崩れて大きく失点する。' },
+  { case: 'ask', q: '売上を上げる取り組みを問われた。どの切り口で分けるか？',
+    a: '客数と客単価。売上は客数かける客単価なので、どちらを増やす施策なのかを分けて書くと二要素が自然に立つ。' },
+  { case: 'ask', q: '本部と加盟店それぞれの取り組みを問われた。どう役割を分けるか？',
+    a: '本部はマーケティングと支援活動なので客数の拡大、加盟店は担当地域での販売に専念するので客単価の向上。それぞれにしかできないことを書く。' },
+  { case: 'ask', q: '「製品戦略とコミュニケーション戦略」を問われた。何に注意するか？',
+    a: '二つの一貫性。同じターゲットに向けて、製品で提供する価値と、伝え方が噛み合っているかを確かめる。' },
+  { case: 'ask', q: '解答欄が (a) と (b) に分かれている。最大のリスクは？',
+    a: '書く場所の取り違え。中身が合っていても欄を間違えると大きく失点する。書き始める前にどちらが何かを必ず確認する。' },
+  { case: 'ask', q: '「課題とその対応策」を問われた。書く順番は？',
+    a: '課題を先に、対応策を後に。課題はあるべき姿に向けて取り組むこと、対応策はその実現手段。課題の欄に対応策を書かない。' },
+  { case: 'ask', q: '「どちらを選び、どのように対応すべきか」を問われた。構成は？',
+    a: '結論プラス方法並列型。まず一つ選んだと明言し、そのあと対応策を二つ並べる。選択を書かずに対応策から始めない。' },
+  { case: 'ask', q: '複数の設問で同じ与件段落が使えそうなとき、どうするか？',
+    a: '棲み分ける。製品や工程の単位、成長戦略か生産現場かという層で切り分け、同じ問題解決を二度書かない。' },
+  { case: 'ask', q: '与件文に、かぎかっこ付きの短い言葉がわざわざ置かれていた。どう扱うか？',
+    a: '出題者の合図。どこかの設問で必ず使う。制約や方向づけを示していることが多いので、無視せず解答に反映させる。' },
+  { case: 'ask', q: '事例IVの最終問題に「財務的視点」という制約があった。どう書くか？',
+    a: '収益性、効率性、安全性のどれに効くかを言葉にする。直近は毎年この制約つきの記述なので、必ず埋めきる。' },
 ];
 
 const AUDIO_CASE_LABEL = {
@@ -8005,6 +8257,13 @@ function audioDecks() {
     desc: '課題と問題点の違い、制約条件、因果の書き方',
     items: common.map(c => ({ ...c, k: audioKey(c.q) })),
   });
+  const ask = SIGNAL_CARDS.filter(c => c.case === 'ask');
+  if (ask.length) decks.push({
+    id: 'signal_ask', group: '与件シグナル', icon: '❓',
+    title: '設問パターン',
+    desc: '設問の問われ方から、何を答えるかを引く',
+    items: ask.map(c => ({ ...c, k: audioKey(c.q) })),
+  });
   for (const cs of ['case1', 'case2', 'case3', 'case4']) {
     const items = SIGNAL_CARDS.filter(c => c.case === cs);
     if (items.length) decks.push({
@@ -8024,7 +8283,7 @@ function audioDecks() {
       items,
     });
   }
-  const allSignal = SIGNAL_CARDS.filter(c => c.case !== 'common');
+  const allSignal = SIGNAL_CARDS.filter(c => c.case !== 'common' && c.case !== 'ask');
   decks.push({
     id: 'signal_all', group: 'まとめて', icon: '🎧',
     title: '与件シグナル 全事例', desc: '事例I〜IVを混ぜて回す',
