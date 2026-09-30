@@ -5509,6 +5509,171 @@ function buildAnaSteps(c) {
   return { steps: s, info: c };
 }
 
+// ---- 付加価値の算出（加算法で勘定科目を仕分ける）----
+// 「付加価値に何が入るか」を忘れやすいので、科目を1つずつ判定して積み上げる。
+const VA_KINDS = {
+  add:   '付加価値に加算する',
+  buy:   '外部購入価値なので加算しない（控除法では売上高から引く側）',
+  below: '経常利益より下の項目なので、付加価値の計算には入れない',
+  none:  '売上高に比例する費用なので、按分してから加算する',   // 常に誤り
+};
+
+function vaOpts(correct) {
+  return Object.entries(VA_KINDS).map(([k, t]) => ({ t, ok: k === correct }));
+}
+
+function buildVaCase() {
+  for (;;) {
+    const c = {
+      emp:     drillRnd(20, 80, 5),
+      ord:     drillRnd(20, 200, 10),    // 経常利益
+      labor:   drillRnd(300, 900, 10),   // 人件費
+      fin:     drillRnd(10, 60, 5),      // 金融費用
+      rent:    drillRnd(20, 120, 10),    // 賃借料
+      tax:     drillRnd(5, 40, 5),       // 租税公課
+      dep:     drillRnd(50, 300, 10),    // 減価償却費
+      out:     drillRnd(100, 500, 10),   // 外注加工費
+      mat:     drillRnd(300, 1200, 10),  // 原材料費
+      corpTax: drillRnd(10, 80, 5),      // 法人税等
+    };
+    c.va = c.ord + c.labor + c.fin + c.rent + c.tax + c.dep;
+    c.lp = c.va / c.emp;
+    c.share = c.labor / c.va;
+    c.sales = c.va + c.mat + c.out + drillRnd(200, 800, 10);
+    // 労働分配率と労働生産性が現実的な帯に収まるまで引き直す
+    if (c.share >= 0.45 && c.share <= 0.75 && c.lp >= 6 && c.lp <= 40) return c;
+  }
+}
+
+function buildVaSteps(c) {
+  const s = drillSteps();
+  const n = drillInt;
+  const G = C.green, O = C.orange;
+
+  s.push({
+    name: '算出方法を決める', tag: '準備', accent: C.muted,
+    qs: [
+      { step: '1／2　二つの方法', q: '付加価値の算出方法は二つある。何と何か。',
+        opts: [
+          { t: '控除法と加算法。売上高から外部購入価値を引くか、利益に費用を足し戻すか', ok: true },
+          { t: '直接法と間接法。売上から積み上げるか、利益から逆算するか' },
+          { t: '原価法と時価法。取得原価で測るか、時価で測るか' },
+          { t: '総額法と純額法。売上総額で測るか、差額で測るか' }],
+        why: '控除法は中小企業庁方式とも呼ばれ、売上高から材料費や外注加工費などの外部購入価値を引く。加算法は日銀方式とも呼ばれ、経常利益に人件費などを足し戻す。設問でどちらの資料が与えられているかで使い分ける。' },
+      { step: '2／2　足すもの', q: '加算法で足す六つは何か。',
+        opts: [
+          { t: '経常利益、人件費、金融費用、賃借料、租税公課、減価償却費', ok: true },
+          { t: '営業利益、人件費、材料費、外注加工費、賃借料、減価償却費' },
+          { t: '経常利益、人件費、法人税等、材料費、租税公課、減価償却費' },
+          { t: '売上総利益、人件費、金融費用、賃借料、租税公課、支払配当金' }],
+        why: '経・人・金・賃・租・減。企業が生み出した価値が、株主、従業員、債権者、地主、国、設備へどう分配されたかを足し戻す形。材料費や外注加工費は外から買ってきたものなので入らない。' }],
+  });
+
+  const item = (name, amt, kind, q, why) =>
+    s.push({
+      name, amt, tag: '仕分け', accent: G,
+      row: { label: name, amt, kind },
+      qs: [{ step: '加算するか', q, why, opts: vaOpts(kind) }],
+    });
+
+  item('経常利益', c.ord, 'add',
+    '経常利益 ' + n(c.ord) + ' はどう扱うか。',
+    '加算法の出発点。営業利益ではなく経常利益から始める。支払利息を引いたあとの数字なので、あとで金融費用を足し戻すことになる。');
+
+  item('人件費', c.labor, 'add',
+    '人件費 ' + n(c.labor) + '（役員報酬、給与手当、賞与、法定福利費）はどう扱うか。',
+    '従業員への分配なので付加価値に含む。付加価値は労働と資本への分配の原資であり、人件費はその最大の部分を占める。人件費 ÷ 付加価値が労働分配率になる。');
+
+  item('金融費用', c.fin, 'add',
+    '金融費用 ' + n(c.fin) + '（支払利息、手形売却損）はどう扱うか。',
+    '債権者への分配なので含む。経常利益の計算ですでに引かれているため、足し戻す形になる。受取利息は収益なので足さない。');
+
+  item('賃借料', c.rent, 'add',
+    '賃借料 ' + n(c.rent) + '（地代家賃、リース料）はどう扱うか。',
+    '土地や設備の提供者への分配なので含む。自社所有なら減価償却費として出てくるものが、借りている場合は賃借料として出てくる。どちらも付加価値の一部。');
+
+  item('租税公課', c.tax, 'add',
+    '租税公課 ' + n(c.tax) + '（固定資産税、印紙税など）はどう扱うか。',
+    '国や自治体への分配なので含む。同じ税でも法人税等は経常利益より下の項目なので扱いが違う。ここが取り違えやすい。');
+
+  item('減価償却費', c.dep, 'add',
+    '減価償却費 ' + n(c.dep) + ' はどう扱うか。',
+    '設備が生んだ価値の取り分なので含む。含めたものを粗付加価値、除いたものを純付加価値と呼ぶ。試験で単に付加価値といえば粗付加価値を指す。');
+
+  item('外注加工費', c.out, 'buy',
+    '外注加工費 ' + n(c.out) + ' はどう扱うか。',
+    '最も間違えやすい項目。外に払った以上、その価値を生んだのは自社ではない。外部購入価値なので加算法では足さず、控除法では売上高から引く。外注を増やすと付加価値は下がる。');
+
+  item('原材料費', c.mat, 'buy',
+    '原材料費 ' + n(c.mat) + ' はどう扱うか。',
+    '買ってきたものなので外部購入価値。控除法ではこれと外注加工費、買入部品費、間接材料費などをまとめて売上高から引く。');
+
+  item('法人税等', c.corpTax, 'below',
+    '法人税等 ' + n(c.corpTax) + ' はどう扱うか。',
+    '経常利益より下に出てくる項目なので、加算法の計算には入らない。租税公課は販管費として経常利益より上にあるので足す。上か下かで分かれる。');
+
+  s.push({
+    name: '付加価値と生産性', tag: '集計', accent: O, total: true,
+    qs: [
+      { step: '1／2　労働生産性',
+        q: '付加価値 ' + n(c.va) + '、従業員 ' + n(c.emp) + '人。労働生産性は。',
+        opts: [
+          { t: '付加価値 ÷ 従業員数 ＝ ' + drillNum(c.lp, 1), ok: true },
+          { t: '売上高 ÷ 従業員数 ＝ ' + drillNum(c.sales / c.emp, 1) },
+          { t: '付加価値 ÷ 売上高 ＝ ' + drillNum(c.va / c.sales * 100, 1) + '%' },
+          { t: '経常利益 ÷ 従業員数 ＝ ' + drillNum(c.ord / c.emp, 1) }],
+        why: '一人あたりどれだけの付加価値を生んだか。売上高を従業員数で割ったものは一人あたり売上高で、これに付加価値率を掛けると労働生産性になる。' },
+      { step: '2／2　労働分配率',
+        q: '労働分配率を求める式は。',
+        opts: [
+          { t: '人件費 ÷ 付加価値 ＝ ' + drillNum(c.share * 100, 1) + '%', ok: true },
+          { t: '人件費 ÷ 売上高 ＝ ' + drillNum(c.labor / c.sales * 100, 1) + '%' },
+          { t: '付加価値 ÷ 人件費 ＝ ' + drillNum(c.va / c.labor, 2) },
+          { t: '人件費 ÷ 従業員数 ＝ ' + drillNum(c.labor / c.emp, 1) }],
+        why: '生み出した付加価値のうち、どれだけを従業員に分配したか。高すぎれば利益が残らず、低すぎれば人が定着しない。労働生産性を上げてから分配を厚くする、という順番で助言する。' }],
+  });
+
+  return { steps: s, info: { ...c, mode: 'valueadd' } };
+}
+
+function VaLedger({ ledger, info }) {
+  const SIGN = { add: 1, buy: 0, below: 0, none: 0 };
+  return (
+    <>
+      <DrillCard title="決算資料（単位：百万円）" color={C.muted}>
+        <div style={{ padding: '2px 0 6px' }}>
+          <DrillRow label="売上高" value={drillInt(info.sales)} />
+          <DrillRow label="従業員数" value={drillInt(info.emp) + '人'} />
+        </div>
+      </DrillCard>
+      <DrillCard title="加算法による付加価値" color={C.green} style={{ marginBottom: 16 }}>
+        <div style={{ padding: '2px 0 6px' }}>
+          {ledger.rows.length === 0 && (
+            <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px' }}>
+              仕分けた科目から順に、ここへ積み上がります。
+            </div>
+          )}
+          {ledger.rows.map(r => (
+            <DrillRow key={r.label} label={r.label}
+              note={r.kind === 'buy' ? '外部購入価値' : r.kind === 'below' ? '経常利益より下' : undefined}
+              value={SIGN[r.kind] ? '＋' + drillInt(r.amt) : '—'}
+              color={SIGN[r.kind] ? undefined : C.muted}
+              valueColor={SIGN[r.kind] ? C.green : C.muted} />
+          ))}
+          {ledger.total && <>
+            <DrillRow label="付加価値額" value={drillInt(info.va)} bold top
+              bg={C.orange + '18'} color={C.orange} valueColor={C.orange} />
+            <DrillRow label="労働生産性" note={'÷ ' + drillInt(info.emp) + '人'}
+              value={drillNum(info.lp, 1)} bold valueColor={C.gold} />
+            <DrillRow label="労働分配率" note={'人件費 ÷ 付加価値'}
+              value={drillNum(info.share * 100, 1) + '%'} bold valueColor={C.gold} />
+          </>}
+        </div>
+      </DrillCard>
+    </>
+  );
+}
+
 // ---- 生産性（労働生産性の分解）----
 // 労働生産性は三通りに分解できる。どの分解式でも同じ値になることが
 // 検算になるので、生成時も恒等式が厳密に成り立つようにする。
@@ -5703,11 +5868,15 @@ function AnalysisDrill({ onFinish, onExit }) {
       }}
       modes={[
         { id: 'pick', icon: '🔍', title: '指標選択', desc: '収益性・効率性・安全性から1つずつ指標を選び、優劣と原因まで。5項目12問。', xp: 90 },
+        { id: 'valueadd', icon: '🧱', title: '付加価値の算出', desc: '勘定科目を1つずつ仕分けて付加価値を積み上げ、労働生産性と労働分配率まで。11項目13問。', xp: 90 },
         { id: 'productivity', icon: '⚙️', title: '生産性の分解', desc: '労働生産性を三通りに分解し、どの要素が足を引っ張っているかを特定する。6項目8問。', xp: 90 },
       ]}
       build={(m) => {
         if (m === 'productivity') {
           return { ...buildProdSteps(buildProdCase()), ledger: { show: [] } };
+        }
+        if (m === 'valueadd') {
+          return { ...buildVaSteps(buildVaCase()), ledger: { rows: [], total: false } };
         }
         const c = buildAnaCase();
         return { ...buildAnaSteps(c), ledger: { picked: [] } };
@@ -5716,20 +5885,44 @@ function AnalysisDrill({ onFinish, onExit }) {
         if (info.mode === 'productivity') {
           return { show: step.show ? [...ledger.show, step.show] : ledger.show };
         }
+        if (info.mode === 'valueadd') {
+          return {
+            rows: step.row ? [...ledger.rows, step.row] : ledger.rows,
+            total: ledger.total || !!step.total,
+          };
+        }
         const ax = ANA_AXES.find(a => a.label === step.tag);
         if (!ax) return ledger;
         const win = info.picks[ax.id];
         return { picked: [...ledger.picked, { axis: ax, key: win.k, dv: win.dv, pv: win.pv }] };
       }}
       headerNote={() => '単位：百万円'}
-      hint={(step) => step.tag === '②分解' || step.tag === '①定義'
-        ? '分子と分母に何を置けば約分されて元の式に戻るか、で考えてみてください。'
-        : '同業他社との差がどの指標でいちばん大きいか、その指標は高いほど良いのかで考えてみてください。'}
+      hint={(step) => step.tag === '仕分け'
+        ? '外から買ってきたものか、自社が生み出して誰かに分配したものか、で考えてみてください。'
+        : step.tag === '②分解' || step.tag === '①定義'
+          ? '分子と分母に何を置けば約分されて元の式に戻るか、で考えてみてください。'
+          : '同業他社との差がどの指標でいちばん大きいか、その指標は高いほど良いのかで考えてみてください。'}
       nextLabel={() => '指標表に記入する'}
       renderLedger={(ledger, info) => info.mode === 'productivity'
         ? <ProdLedger ledger={ledger} info={info} />
-        : <AnaLedger ledger={ledger} info={info} />}
-      renderResult={(ledger, info, missed) => info.mode === 'productivity' ? (
+        : info.mode === 'valueadd'
+          ? <VaLedger ledger={ledger} info={info} />
+          : <AnaLedger ledger={ledger} info={info} />}
+      renderResult={(ledger, info, missed) => info.mode === 'valueadd' ? (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>付加価値額</div>
+          <div style={{ fontSize: 30, fontWeight: 700, marginTop: 2, color: missed.length === 0 ? C.gold : C.green }}>
+            {drillInt(info.va)}
+          </div>
+          <div style={{ fontSize: 13, color: C.text, marginTop: 6 }}>
+            労働生産性 {drillNum(info.lp, 1)}／労働分配率 {drillNum(info.share * 100, 1)}%
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.7 }}>
+            経・人・金・賃・租・減
+          </div>
+        </div>
+      ) : info.mode === 'productivity' ? (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>{missed.length === 0 ? '🎉' : '📝'}</div>
           <div style={{ fontSize: 13, color: C.muted }}>労働生産性</div>
@@ -8176,6 +8369,20 @@ const SIGNAL_CARDS = [
     a: '出題者の合図。どこかの設問で必ず使う。制約や方向づけを示していることが多いので、無視せず解答に反映させる。' },
   { case: 'ask', q: '事例IVの最終問題に「財務的視点」という制約があった。どう書くか？',
     a: '収益性、効率性、安全性のどれに効くかを言葉にする。直近は毎年この制約つきの記述なので、必ず埋めきる。' },
+
+  // --- 付加価値（事例IV）---
+  { case: 'case4', q: '付加価値の算出方法は二つある。何と何か？',
+    a: '控除法と加算法。控除法は売上高から材料費や外注加工費などの外部購入価値を引く。加算法は経常利益に費用を足し戻す。設問で与えられた資料で使い分ける。' },
+  { case: 'case4', q: '加算法で付加価値に足す六つは？',
+    a: '経常利益、人件費、金融費用、賃借料、租税公課、減価償却費。経・人・金・賃・租・減。株主、従業員、債権者、地主、国、設備への分配を足し戻す。' },
+  { case: 'case4', q: '外注加工費は付加価値に含めるか？',
+    a: '含めない。外に払った以上、その価値を生んだのは自社ではない。外部購入価値なので控除法では売上高から引く。外注を増やすと付加価値は下がる。' },
+  { case: 'case4', q: '租税公課は足すのに、法人税等は足さない。なぜか？',
+    a: '経常利益より上か下か。租税公課は販管費なので経常利益に到達する前に引かれており足し戻す。法人税等は経常利益より下なので計算に入らない。' },
+  { case: 'case4', q: '減価償却費を含めた付加価値と、含めない付加価値の呼び分けは？',
+    a: '含めたものが粗付加価値、除いたものが純付加価値。試験で単に付加価値といえば粗付加価値を指す。設備が生んだ価値の取り分なので通常は含める。' },
+  { case: 'case4', q: '労働分配率はどう求め、どう読むか？',
+    a: '人件費 ÷ 付加価値。生んだ価値のうち従業員へ配った割合。高すぎれば利益が残らず、低すぎれば人が定着しない。生産性を上げてから分配を厚くする順で助言する。' },
 ];
 
 const AUDIO_CASE_LABEL = {
