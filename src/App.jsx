@@ -4278,6 +4278,12 @@ function drillPct(n, digits = 1) {
  *   headerNote  (info) => string                      ヘッダ右上の注記
  *   hint        (step) => string                      誤答時のヒント
  *   nextLabel   (step, isLastQ) => string             次へボタンの文言
+ *
+ * 設問は単一選択がデフォルト。q.multi を立てると複数選択になり、
+ * 選択肢を自由にトグルして「確認する」でまとめて判定する（完全一致で正解）。
+ * 外したときは正解を明かさず、数のズレか入れ替わりかだけを返す。
+ * 2回外すと正解を開示し、選べなかったものに「見落とし」、
+ * 余計に選んだものに「選びすぎ」の札を立てる。
  */
 function DrillRunner({
   meta, modes, build, applyStep, renderLedger, renderResult,
@@ -4292,6 +4298,8 @@ function DrillRunner({
   const [qi, setQi]         = useState(0);
   const [missed, setMissed] = useState([]);
   const [picked, setPicked] = useState([]);
+  const [sel, setSel]       = useState([]);     // 複数選択で選んでいる添字
+  const [tries, setTries]   = useState(0);      // 複数選択の不正解回数
   const [phase, setPhase]   = useState('ask');
   const [done, setDone]     = useState(false);
   const [reported, setReported] = useState(false);
@@ -4302,7 +4310,8 @@ function DrillRunner({
     const built = build(m);
     setSteps(built.steps); setInfo(built.info); setLedger(built.ledger);
     setMode(m); setI(0); setQi(0);
-    setMissed([]); setPicked([]); setPhase('ask'); setDone(false); setReported(false);
+    setMissed([]); setPicked([]); setSel([]); setTries(0);
+    setPhase('ask'); setDone(false); setReported(false);
   }
 
   if (!mode) {
@@ -4346,12 +4355,38 @@ function DrillRunner({
     if (picked.length > 0) setPhase('reveal');
   }
 
+  // 複数選択。選択をトグルし、「確認する」でまとめて判定する。
+  function toggle(k) {
+    if (phase !== 'ask') return;
+    setSel(sel.includes(k) ? sel.filter(x => x !== k) : [...sel, k]);
+  }
+
+  function submitMulti() {
+    if (phase !== 'ask' || sel.length === 0) return;
+    const need = q.opts.map((o, k) => (o.ok ? k : -1)).filter(k => k >= 0);
+    const exact = need.length === sel.length && need.every(k => sel.includes(k));
+    if (exact) { setPhase('right'); return; }
+    setMissed([...missed, step.name]);
+    if (tries >= 1) setPhase('reveal'); else setTries(tries + 1);
+  }
+
+  // 複数選択の誤答フィードバック。正解そのものは明かさず、ズレの種類だけ返す。
+  function multiNote() {
+    const need = q.opts.filter(o => o.ok).length;
+    if (sel.length !== need) {
+      return '選んだ数が ' + sel.length + ' 個。' + need + ' 個のはずです。';
+    }
+    return '数は合っていますが、入れ替わっているものがあります。';
+  }
+
   function next() {
-    if (qi + 1 < step.qs.length) { setQi(qi + 1); setPicked([]); setPhase('ask'); return; }
+    if (qi + 1 < step.qs.length) {
+      setQi(qi + 1); setPicked([]); setSel([]); setTries(0); setPhase('ask'); return;
+    }
     const nl = applyStep(ledger, step, info);
     setLedger(nl);
     const ni = i + 1;
-    setI(ni); setQi(0); setPicked([]); setPhase('ask');
+    setI(ni); setQi(0); setPicked([]); setSel([]); setTries(0); setPhase('ask');
     if (ni >= steps.length) {
       setDone(true);
       if (!reported) {
@@ -4450,29 +4485,72 @@ function DrillRunner({
           <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 14, lineHeight: 1.6 }}>{q.q}</div>
 
           {q.opts.map((o, k) => {
-            const wrong = picked.includes(k) && !o.ok;
-            const right = (phase === 'right' && picked.includes(k) && o.ok) || (phase === 'reveal' && o.ok);
+            const shown = phase === 'right' || phase === 'reveal';
+            const on    = sel.includes(k);
+            let bd = C.border, bg = '#0d1117', note = null, dis, click;
+
+            if (q.multi) {
+              if (shown && o.ok)      { bd = C.green; bg = C.green + '1f'; if (!on) note = '見落とし'; }
+              else if (shown && on)   { bd = C.red;   bg = C.red + '18';   note = '選びすぎ'; }
+              else if (on)            { bd = accent;  bg = accent + '14'; }
+              dis = phase !== 'ask';
+              click = () => toggle(k);
+            } else {
+              const wrong = picked.includes(k) && !o.ok;
+              const right = (phase === 'right' && picked.includes(k) && o.ok) || (phase === 'reveal' && o.ok);
+              if (right)      { bd = C.green; bg = C.green + '1f'; }
+              else if (wrong) { bd = C.red;   bg = C.red + '18'; }
+              dis = phase !== 'ask' || wrong;
+              click = () => choose(k);
+            }
+
             return (
-              <button key={k} onClick={() => choose(k)} disabled={phase !== 'ask' || wrong}
+              <button key={k} onClick={click} disabled={dis}
                 style={{
-                  display: 'block', width: '100%', textAlign: 'left',
+                  display: 'flex', width: '100%', textAlign: 'left',
+                  alignItems: 'flex-start', gap: 10,
                   padding: '12px 13px', marginBottom: 8, borderRadius: 10,
-                  border: `1px solid ${right ? C.green : wrong ? C.red : C.border}`,
-                  background: right ? C.green + '1f' : wrong ? C.red + '18' : '#0d1117',
+                  border: `1px solid ${bd}`, background: bg,
                   color: C.text, fontSize: 14, lineHeight: 1.55,
-                  cursor: phase === 'ask' && !wrong ? 'pointer' : 'default',
+                  cursor: dis ? 'default' : 'pointer',
                   fontFamily: 'inherit',
-                }}>{o.t}</button>
+                }}>
+                {q.multi && (
+                  <span style={{
+                    fontSize: 15, lineHeight: 1.45, flexShrink: 0,
+                    color: on ? (shown ? bd : accent) : C.muted,
+                  }}>{on ? '☑' : '☐'}</span>
+                )}
+                <span style={{ flex: 1 }}>{o.t}</span>
+                {note && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap',
+                    padding: '2px 6px', borderRadius: 5, background: bd + '2e', color: bd,
+                  }}>{note}</span>
+                )}
+              </button>
             );
           })}
 
-          {phase === 'ask' && picked.length > 0 && (
+          {q.multi && phase === 'ask' && (
+            <button onClick={submitMulti} disabled={sel.length === 0} style={{
+              marginTop: 4, width: '100%', padding: 13, borderRadius: 10, border: 'none',
+              background: sel.length === 0 ? C.border : accent,
+              color: sel.length === 0 ? C.muted : '#000',
+              fontWeight: 700, fontSize: 15, fontFamily: 'inherit',
+              cursor: sel.length === 0 ? 'default' : 'pointer',
+            }}>
+              {sel.length === 0 ? '選んでください' : `この ${sel.length} つで確認する`}
+            </button>
+          )}
+
+          {phase === 'ask' && (q.multi ? tries > 0 : picked.length > 0) && (
             <div style={{
               marginTop: 12, padding: '12px 13px', borderRadius: 10,
               background: C.red + '14', border: `1px solid ${C.red}44`,
               fontSize: 13, color: C.text, lineHeight: 1.7,
             }}>
-              ちがいます。{hint ? hint(step) : 'もう一度考えてみてください。'}
+              ちがいます。{q.multi ? multiNote() : (hint ? hint(step) : 'もう一度考えてみてください。')}
             </div>
           )}
 
@@ -5511,44 +5589,47 @@ function buildAnaSteps(c) {
 
 // ---- 付加価値の算出（加算法で勘定科目を仕分ける）----
 // 「付加価値に何が入るか」を忘れやすいので、科目を1つずつ判定して積み上げる。
-const VA_KINDS = {
-  add:   '付加価値に加算する',
-  buy:   '外部購入価値なので加算しない（控除法では売上高から引く側）',
-  below: '経常利益より下の項目なので、付加価値の計算には入れない',
-  none:  '売上高に比例する費用なので、按分してから加算する',   // 常に誤り
-};
-
-function vaOpts(correct) {
-  return Object.entries(VA_KINDS).map(([k, t]) => ({ t, ok: k === correct }));
-}
+// 付加価値の仕分け。複数選択で「加算するもの」「外部購入価値」を一括で選ばせる。
+function vaItem(label, amt) { return { t: label + '　' + drillInt(amt), amt, label }; }
 
 function buildVaCase() {
   for (;;) {
     const c = {
       emp:     drillRnd(20, 80, 5),
+      // 加算法で足す六つ
       ord:     drillRnd(20, 200, 10),    // 経常利益
       labor:   drillRnd(300, 900, 10),   // 人件費
       fin:     drillRnd(10, 60, 5),      // 金融費用
       rent:    drillRnd(20, 120, 10),    // 賃借料
       tax:     drillRnd(5, 40, 5),       // 租税公課
       dep:     drillRnd(50, 300, 10),    // 減価償却費
-      out:     drillRnd(100, 500, 10),   // 外注加工費
-      mat:     drillRnd(300, 1200, 10),  // 原材料費
-      corpTax: drillRnd(10, 80, 5),      // 法人税等
+      // 外部購入価値
+      mat:     drillRnd(800, 2000, 10),  // 原材料費
+      parts:   drillRnd(200, 700, 10),   // 買入部品費
+      out:     drillRnd(150, 600, 10),   // 外注加工費
+      imat:    drillRnd(50, 200, 10),    // 間接材料費
+      // 攪乱用（どちらにも入らない）
+      corpTax: drillRnd(10, 80, 5),      // 法人税等（経常利益より下）
+      div:     drillRnd(10, 60, 5),      // 支払配当金（経常利益より下）
+      recv:    drillRnd(3, 20, 1),       // 受取利息（収益）
     };
-    c.va = c.ord + c.labor + c.fin + c.rent + c.tax + c.dep;
-    c.lp = c.va / c.emp;
-    c.share = c.labor / c.va;
-    c.sales = c.va + c.mat + c.out + drillRnd(200, 800, 10);
-    // 労働分配率と労働生産性が現実的な帯に収まるまで引き直す
-    if (c.share >= 0.45 && c.share <= 0.75 && c.lp >= 6 && c.lp <= 40) return c;
+    c.va  = c.ord + c.labor + c.fin + c.rent + c.tax + c.dep;
+    c.ext = c.mat + c.parts + c.out + c.imat;
+    // 控除法（売上高 − 外部購入価値）と加算法が必ず同じ額になるよう売上高を決める
+    c.sales  = c.va + c.ext;
+    c.vaRate = c.va / c.sales;
+    c.lp     = c.va / c.emp;
+    c.share  = c.labor / c.va;
+    // 労働分配率・労働生産性・付加価値率が現実的な帯に収まるまで引き直す
+    if (c.share >= 0.45 && c.share <= 0.75 && c.lp >= 6 && c.lp <= 40
+        && c.vaRate >= 0.2 && c.vaRate <= 0.35) return c;
   }
 }
 
 function buildVaSteps(c) {
   const s = drillSteps();
   const n = drillInt;
-  const G = C.green, O = C.orange;
+  const G = C.green, O = C.orange, B = C.accent;
 
   s.push({
     name: '算出方法を決める', tag: '準備', accent: C.muted,
@@ -5559,7 +5640,7 @@ function buildVaSteps(c) {
           { t: '直接法と間接法。売上から積み上げるか、利益から逆算するか' },
           { t: '原価法と時価法。取得原価で測るか、時価で測るか' },
           { t: '総額法と純額法。売上総額で測るか、差額で測るか' }],
-        why: '控除法は中小企業庁方式とも呼ばれ、売上高から材料費や外注加工費などの外部購入価値を引く。加算法は日銀方式とも呼ばれ、経常利益に人件費などを足し戻す。設問でどちらの資料が与えられているかで使い分ける。' },
+        why: '控除法は中小企業庁方式とも呼ばれ、売上高から材料費や外注加工費などの外部購入価値を引く。加算法は日銀方式とも呼ばれ、経常利益に人件費などを足し戻す。どちらで計算しても同じ額になる。設問でどちらの資料が与えられているかで使い分ける。' },
       { step: '2／2　足すもの', q: '加算法で足す六つは何か。',
         opts: [
           { t: '経常利益、人件費、金融費用、賃借料、租税公課、減価償却費', ok: true },
@@ -5569,48 +5650,82 @@ function buildVaSteps(c) {
         why: '経・人・金・賃・租・減。企業が生み出した価値が、株主、従業員、債権者、地主、国、設備へどう分配されたかを足し戻す形。材料費や外注加工費は外から買ってきたものなので入らない。' }],
   });
 
-  const item = (name, amt, kind, q, why) =>
-    s.push({
-      name, amt, tag: '仕分け', accent: G,
-      row: { label: name, amt, kind },
-      qs: [{ step: '加算するか', q, why, opts: vaOpts(kind) }],
-    });
+  s.push({
+    name: '加算する項目を選ぶ', tag: '加算法', accent: G, vaAdd: true,
+    qs: [{
+      step: '六つを選ぶ', multi: true,
+      q: '次の資料から、加算法で付加価値に加算するものをすべて選べ（六つ）。',
+      opts: [
+        { ...vaItem('経常利益', c.ord),       ok: true },
+        { ...vaItem('人件費', c.labor),       ok: true },
+        { ...vaItem('金融費用（支払利息）', c.fin), ok: true },
+        { ...vaItem('賃借料（地代家賃・リース料）', c.rent), ok: true },
+        { ...vaItem('租税公課（固定資産税など）', c.tax), ok: true },
+        { ...vaItem('減価償却費', c.dep),     ok: true },
+        vaItem('原材料費', c.mat),
+        vaItem('買入部品費', c.parts),
+        vaItem('外注加工費', c.out),
+        vaItem('法人税等', c.corpTax),
+        vaItem('支払配当金', c.div),
+        vaItem('受取利息', c.recv),
+      ],
+      why: '経・人・金・賃・租・減。それぞれ株主、従業員、債権者、地主、国、設備への分配にあたる。'
+        + '原材料費・買入部品費・外注加工費は外から買った価値なので入らない。'
+        + '法人税等と支払配当金は経常利益より下の項目なので入らない。'
+        + '受取利息は収益で、すでに経常利益の中に入っているので足さない（足すのは引かれている支払利息のほう）。'
+        + '合計 ' + n(c.va) + ' が付加価値額。',
+    }],
+  });
 
-  item('経常利益', c.ord, 'add',
-    '経常利益 ' + n(c.ord) + ' はどう扱うか。',
-    '加算法の出発点。営業利益ではなく経常利益から始める。支払利息を引いたあとの数字なので、あとで金融費用を足し戻すことになる。');
+  s.push({
+    name: '外部購入価値を選ぶ', tag: '控除法', accent: B, vaExt: true,
+    qs: [{
+      step: '四つを選ぶ', multi: true,
+      q: '控除法では売上高から外部購入価値を引く。引く側に入るものをすべて選べ（四つ）。',
+      opts: [
+        { ...vaItem('原材料費', c.mat),   ok: true },
+        { ...vaItem('買入部品費', c.parts), ok: true },
+        { ...vaItem('外注加工費', c.out), ok: true },
+        { ...vaItem('間接材料費', c.imat), ok: true },
+        vaItem('人件費', c.labor),
+        vaItem('減価償却費', c.dep),
+        vaItem('賃借料', c.rent),
+        vaItem('租税公課', c.tax),
+      ],
+      why: '外部購入価値は「他社が生んだ価値を買ってきた分」。原材料費、買入部品費、外注加工費、間接材料費などがこれにあたり、合計 '
+        + n(c.ext) + '。売上高 ' + n(c.sales) + ' から引くと ' + n(c.va)
+        + ' で、加算法の結果と一致する。人件費や減価償却費は社内で生んだ価値の分配なので引かない。',
+    }],
+  });
 
-  item('人件費', c.labor, 'add',
-    '人件費 ' + n(c.labor) + '（役員報酬、給与手当、賞与、法定福利費）はどう扱うか。',
-    '従業員への分配なので付加価値に含む。付加価値は労働と資本への分配の原資であり、人件費はその最大の部分を占める。人件費 ÷ 付加価値が労働分配率になる。');
-
-  item('金融費用', c.fin, 'add',
-    '金融費用 ' + n(c.fin) + '（支払利息、手形売却損）はどう扱うか。',
-    '債権者への分配なので含む。経常利益の計算ですでに引かれているため、足し戻す形になる。受取利息は収益なので足さない。');
-
-  item('賃借料', c.rent, 'add',
-    '賃借料 ' + n(c.rent) + '（地代家賃、リース料）はどう扱うか。',
-    '土地や設備の提供者への分配なので含む。自社所有なら減価償却費として出てくるものが、借りている場合は賃借料として出てくる。どちらも付加価値の一部。');
-
-  item('租税公課', c.tax, 'add',
-    '租税公課 ' + n(c.tax) + '（固定資産税、印紙税など）はどう扱うか。',
-    '国や自治体への分配なので含む。同じ税でも法人税等は経常利益より下の項目なので扱いが違う。ここが取り違えやすい。');
-
-  item('減価償却費', c.dep, 'add',
-    '減価償却費 ' + n(c.dep) + ' はどう扱うか。',
-    '設備が生んだ価値の取り分なので含む。含めたものを粗付加価値、除いたものを純付加価値と呼ぶ。試験で単に付加価値といえば粗付加価値を指す。');
-
-  item('外注加工費', c.out, 'buy',
-    '外注加工費 ' + n(c.out) + ' はどう扱うか。',
-    '最も間違えやすい項目。外に払った以上、その価値を生んだのは自社ではない。外部購入価値なので加算法では足さず、控除法では売上高から引く。外注を増やすと付加価値は下がる。');
-
-  item('原材料費', c.mat, 'buy',
-    '原材料費 ' + n(c.mat) + ' はどう扱うか。',
-    '買ってきたものなので外部購入価値。控除法ではこれと外注加工費、買入部品費、間接材料費などをまとめて売上高から引く。');
-
-  item('法人税等', c.corpTax, 'below',
-    '法人税等 ' + n(c.corpTax) + ' はどう扱うか。',
-    '経常利益より下に出てくる項目なので、加算法の計算には入らない。租税公課は販管費として経常利益より上にあるので足す。上か下かで分かれる。');
+  s.push({
+    name: '取り違えやすい三つ', tag: '確認', accent: O,
+    qs: [
+      { step: '1／3　外注と付加価値',
+        q: '外注加工費 ' + n(c.out) + ' を増やして社内工程を減らすと、付加価値はどうなるか。',
+        opts: [
+          { t: '下がる。外に払った分だけ、自社が生んだ価値ではなくなる', ok: true },
+          { t: '上がる。社内の人件費が減って経常利益が増えるため' },
+          { t: '変わらない。付加価値は売上高で決まるため' },
+          { t: '変わらない。外注加工費も加算法で足し戻すため' }],
+        why: '最も間違えやすい項目。外注加工費は外部購入価値なので、加算法では足さず、控除法では売上高から引く。外注を増やすと付加価値も労働生産性も下がる。事例IIIで内製化が助言になるのはこのため。' },
+      { step: '2／3　二つの税',
+        q: '租税公課は足すのに、法人税等は足さない。この違いはどこから来るか。',
+        opts: [
+          { t: '租税公課は経常利益より上（販管費）、法人税等は下にあるから', ok: true },
+          { t: '租税公課は国への分配、法人税等は株主への分配だから' },
+          { t: '租税公課は費用、法人税等は利益の処分だから' },
+          { t: '租税公課は毎期発生し、法人税等は赤字なら発生しないから' }],
+        why: '加算法は経常利益を出発点にして、そこまでに引かれている分配を足し戻す形。固定資産税や印紙税などの租税公課は販管費として経常利益より上で引かれているので足し戻す。法人税等は経常利益より下なので、そもそも引かれていない。上か下かで分かれる。' },
+      { step: '3／3　粗と純',
+        q: '減価償却費 ' + n(c.dep) + ' を含めたものと除いたもので呼び方が変わる。試験で単に「付加価値」といえばどちらか。',
+        opts: [
+          { t: '含めた粗付加価値。日銀方式はこちら', ok: true },
+          { t: '除いた純付加価値。設備の目減り分は価値ではないため' },
+          { t: '設問に指示がなければどちらでもよい' },
+          { t: '製造業は粗、非製造業は純と決まっている' }],
+        why: '減価償却費を含めたものが粗付加価値、除いたものが純付加価値。試験で単に付加価値といえば粗付加価値を指す。設備が生んだ価値の取り分と考えて含める。' }],
+  });
 
   s.push({
     name: '付加価値と生産性', tag: '集計', accent: O, total: true,
@@ -5620,9 +5735,10 @@ function buildVaSteps(c) {
         opts: [
           { t: '付加価値 ÷ 従業員数 ＝ ' + drillNum(c.lp, 1), ok: true },
           { t: '売上高 ÷ 従業員数 ＝ ' + drillNum(c.sales / c.emp, 1) },
-          { t: '付加価値 ÷ 売上高 ＝ ' + drillNum(c.va / c.sales * 100, 1) + '%' },
+          { t: '付加価値 ÷ 売上高 ＝ ' + drillNum(c.vaRate * 100, 1) + '%' },
           { t: '経常利益 ÷ 従業員数 ＝ ' + drillNum(c.ord / c.emp, 1) }],
-        why: '一人あたりどれだけの付加価値を生んだか。売上高を従業員数で割ったものは一人あたり売上高で、これに付加価値率を掛けると労働生産性になる。' },
+        why: '一人あたりどれだけの付加価値を生んだか。売上高を従業員数で割ったものは一人あたり売上高で、これに付加価値率 '
+          + drillNum(c.vaRate * 100, 1) + '% を掛けると労働生産性になる。' },
       { step: '2／2　労働分配率',
         q: '労働分配率を求める式は。',
         opts: [
@@ -5637,39 +5753,66 @@ function buildVaSteps(c) {
 }
 
 function VaLedger({ ledger, info }) {
-  const SIGN = { add: 1, buy: 0, below: 0, none: 0 };
+  const n = drillInt;
   return (
     <>
       <DrillCard title="決算資料（単位：百万円）" color={C.muted}>
         <div style={{ padding: '2px 0 6px' }}>
-          <DrillRow label="売上高" value={drillInt(info.sales)} />
-          <DrillRow label="従業員数" value={drillInt(info.emp) + '人'} />
+          <DrillRow label="売上高" value={n(info.sales)} />
+          <DrillRow label="従業員数" value={n(info.emp) + '人'} />
         </div>
       </DrillCard>
-      <DrillCard title="加算法による付加価値" color={C.green} style={{ marginBottom: 16 }}>
-        <div style={{ padding: '2px 0 6px' }}>
-          {ledger.rows.length === 0 && (
-            <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px' }}>
-              仕分けた科目から順に、ここへ積み上がります。
-            </div>
-          )}
-          {ledger.rows.map(r => (
-            <DrillRow key={r.label} label={r.label}
-              note={r.kind === 'buy' ? '外部購入価値' : r.kind === 'below' ? '経常利益より下' : undefined}
-              value={SIGN[r.kind] ? '＋' + drillInt(r.amt) : '—'}
-              color={SIGN[r.kind] ? undefined : C.muted}
-              valueColor={SIGN[r.kind] ? C.green : C.muted} />
-          ))}
-          {ledger.total && <>
-            <DrillRow label="付加価値額" value={drillInt(info.va)} bold top
+
+      {!ledger.add && !ledger.ext && (
+        <DrillCard title="付加価値" color={C.green} style={{ marginBottom: 16 }}>
+          <div style={{ color: C.muted, fontSize: 11, padding: '10px 12px' }}>
+            仕分けた項目が、加算法と控除法の両側からここへ積み上がります。
+          </div>
+        </DrillCard>
+      )}
+
+      {ledger.add && (
+        <DrillCard title="加算法（経・人・金・賃・租・減）" color={C.green}
+          style={{ marginBottom: ledger.ext ? 10 : 16 }}>
+          <div style={{ padding: '2px 0 6px' }}>
+            <DrillRow label="経常利益"   value={'＋' + n(info.ord)}   valueColor={C.green} />
+            <DrillRow label="人件費"     value={'＋' + n(info.labor)} valueColor={C.green} />
+            <DrillRow label="金融費用"   value={'＋' + n(info.fin)}   valueColor={C.green} />
+            <DrillRow label="賃借料"     value={'＋' + n(info.rent)}  valueColor={C.green} />
+            <DrillRow label="租税公課"   value={'＋' + n(info.tax)}   valueColor={C.green} />
+            <DrillRow label="減価償却費" value={'＋' + n(info.dep)}   valueColor={C.green} />
+            <DrillRow label="付加価値額" value={n(info.va)} bold top
               bg={C.orange + '18'} color={C.orange} valueColor={C.orange} />
-            <DrillRow label="労働生産性" note={'÷ ' + drillInt(info.emp) + '人'}
+          </div>
+        </DrillCard>
+      )}
+
+      {ledger.ext && (
+        <DrillCard title="控除法（売上高 − 外部購入価値）" color={C.accent} style={{ marginBottom: 16 }}>
+          <div style={{ padding: '2px 0 6px' }}>
+            <DrillRow label="売上高" value={n(info.sales)} />
+            <DrillRow label="原材料費"   value={'−' + n(info.mat)}   valueColor={C.red} />
+            <DrillRow label="買入部品費" value={'−' + n(info.parts)} valueColor={C.red} />
+            <DrillRow label="外注加工費" value={'−' + n(info.out)}   valueColor={C.red} />
+            <DrillRow label="間接材料費" value={'−' + n(info.imat)}  valueColor={C.red} />
+            <DrillRow label="付加価値額" note="加算法と一致" value={n(info.va)} bold top
+              bg={C.orange + '18'} color={C.orange} valueColor={C.orange} />
+          </div>
+        </DrillCard>
+      )}
+
+      {ledger.total && (
+        <DrillCard title="生産性" color={C.gold} style={{ marginBottom: 16 }}>
+          <div style={{ padding: '2px 0 6px' }}>
+            <DrillRow label="付加価値率" note="付加価値 ÷ 売上高"
+              value={drillNum(info.vaRate * 100, 1) + '%'} valueColor={C.gold} />
+            <DrillRow label="労働生産性" note={'÷ ' + n(info.emp) + '人'}
               value={drillNum(info.lp, 1)} bold valueColor={C.gold} />
-            <DrillRow label="労働分配率" note={'人件費 ÷ 付加価値'}
+            <DrillRow label="労働分配率" note="人件費 ÷ 付加価値"
               value={drillNum(info.share * 100, 1) + '%'} bold valueColor={C.gold} />
-          </>}
-        </div>
-      </DrillCard>
+          </div>
+        </DrillCard>
+      )}
     </>
   );
 }
@@ -5868,7 +6011,7 @@ function AnalysisDrill({ onFinish, onExit }) {
       }}
       modes={[
         { id: 'pick', icon: '🔍', title: '指標選択', desc: '収益性・効率性・安全性から1つずつ指標を選び、優劣と原因まで。5項目12問。', xp: 90 },
-        { id: 'valueadd', icon: '🧱', title: '付加価値の算出', desc: '勘定科目を1つずつ仕分けて付加価値を積み上げ、労働生産性と労働分配率まで。11項目13問。', xp: 90 },
+        { id: 'valueadd', icon: '🧱', title: '付加価値の算出', desc: '12の費用から加算する6つを複数選択で選び、控除法と突き合わせて労働生産性まで。5項目9問。', xp: 90 },
         { id: 'productivity', icon: '⚙️', title: '生産性の分解', desc: '労働生産性を三通りに分解し、どの要素が足を引っ張っているかを特定する。6項目8問。', xp: 90 },
       ]}
       build={(m) => {
@@ -5876,7 +6019,7 @@ function AnalysisDrill({ onFinish, onExit }) {
           return { ...buildProdSteps(buildProdCase()), ledger: { show: [] } };
         }
         if (m === 'valueadd') {
-          return { ...buildVaSteps(buildVaCase()), ledger: { rows: [], total: false } };
+          return { ...buildVaSteps(buildVaCase()), ledger: { add: false, ext: false, total: false } };
         }
         const c = buildAnaCase();
         return { ...buildAnaSteps(c), ledger: { picked: [] } };
@@ -5887,7 +6030,8 @@ function AnalysisDrill({ onFinish, onExit }) {
         }
         if (info.mode === 'valueadd') {
           return {
-            rows: step.row ? [...ledger.rows, step.row] : ledger.rows,
+            add:   ledger.add || !!step.vaAdd,
+            ext:   ledger.ext || !!step.vaExt,
             total: ledger.total || !!step.total,
           };
         }
@@ -5897,12 +6041,17 @@ function AnalysisDrill({ onFinish, onExit }) {
         return { picked: [...ledger.picked, { axis: ax, key: win.k, dv: win.dv, pv: win.pv }] };
       }}
       headerNote={() => '単位：百万円'}
-      hint={(step) => step.tag === '仕分け'
+      hint={(step) => step.tag === '確認' || step.tag === '準備'
         ? '外から買ってきたものか、自社が生み出して誰かに分配したものか、で考えてみてください。'
         : step.tag === '②分解' || step.tag === '①定義'
           ? '分子と分母に何を置けば約分されて元の式に戻るか、で考えてみてください。'
           : '同業他社との差がどの指標でいちばん大きいか、その指標は高いほど良いのかで考えてみてください。'}
-      nextLabel={() => '指標表に記入する'}
+      nextLabel={(step) => ({
+        '加算法': '加算法の表に記入する',
+        '控除法': '控除法で突き合わせる',
+        '確認':   '集計に進む',
+        '集計':   '生産性を計算する',
+      })[step.tag] || '指標表に記入する'}
       renderLedger={(ledger, info) => info.mode === 'productivity'
         ? <ProdLedger ledger={ledger} info={info} />
         : info.mode === 'valueadd'
@@ -5919,7 +6068,8 @@ function AnalysisDrill({ onFinish, onExit }) {
             労働生産性 {drillNum(info.lp, 1)}／労働分配率 {drillNum(info.share * 100, 1)}%
           </div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.7 }}>
-            経・人・金・賃・租・減
+            加算法は 経・人・金・賃・租・減<br />
+            控除法は 売上高 − 外部購入価値（材料・部品・外注・間接材料）
           </div>
         </div>
       ) : info.mode === 'productivity' ? (
